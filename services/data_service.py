@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import random
 import urllib.request
-from typing import List
+from typing import Iterable, List
+import time
 
 
 class DataService:
@@ -37,3 +38,18 @@ class DataService:
             for _ in range(limit - 1):
                 prices.append(prices[-1] * (1 + random.uniform(-0.02, 0.02)))
             return prices
+
+    def stream_prices(
+        self,
+        symbol: str = "BTCUSDT",
+        interval: float = 300.0,
+        limit: int | None = None,
+    ) -> Iterable[float]:
+        """Yield the latest price at the given interval."""
+        count = 0
+        while True:
+            if limit is not None and count >= limit:
+                break
+            yield self.fetch_price(symbol)
+            count += 1
+            time.sleep(interval)

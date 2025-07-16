@@ -8,6 +8,7 @@ This application aims to regularly fetch the Bitcoin price using the Binance API
 - Apply the five most commonly used and trusted trading strategies
 - Simulate long/short trades with a virtual balance of 10,000 TL for each strategy
 - Real-time buy/sell simulation adjusts position size according to signal strength
+- Prices are fetched live on each iteration instead of relying on historical data
 - Separate graph for each strategy:
   - Price curve
   - Buy points (red), sell points (green)

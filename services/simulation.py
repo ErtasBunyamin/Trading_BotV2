@@ -3,51 +3,64 @@
 from __future__ import annotations
 
 from typing import Iterable, List
+import time
 
 from services.data_service import DataService
 from services.logger import Logger
 
 
 class Simulation:
-    """Simulate trades for each strategy on historical price data."""
+    """Simulate trades for each strategy using live price data."""
 
     def __init__(self, data_service: DataService, logger: Logger, strategies: Iterable) -> None:
         self.data_service = data_service
         self.logger = logger
         self.strategies = list(strategies)
 
-    def run(self) -> List[dict]:
-        """Run the simulation and return results per strategy."""
-        prices = self.data_service.get_historical_prices()
+    def run(self, iterations: int = 100, interval: float = 300.0) -> List[dict]:
+        """Run the simulation in real-time and return results per strategy."""
         results = []
         for strategy in self.strategies:
-            balance = 10000.0
-            position = 0.0
-            trades: List[tuple[int, str]] = []
-            signals = strategy.generate_signals(prices)
-            signals_index = 0
-            for i, price in enumerate(prices):
-                while signals_index < len(signals) and signals[signals_index][0] == i:
-                    _, action, strength = signals[signals_index]
-                    strength = max(0.0, min(1.0, strength))
-                    if action == "BUY" and balance > 0:
-                        amount = balance * strength
-                        position += amount / price
-                        balance -= amount
-                        trades.append((i, "BUY"))
-                    elif action == "SELL" and position > 0:
-                        amount = position * strength
-                        balance += amount * price
-                        position -= amount
-                        trades.append((i, "SELL"))
-                    signals_index += 1
-            final_balance = balance + position * prices[-1]
-            profit = final_balance - 10000.0
             results.append({
                 "name": strategy.name,
-                "prices": prices,
-                "trades": trades,
-                "profit": profit,
+                "prices": [],
+                "trades": [],
+                "balance": 10000.0,
+                "position": 0.0,
             })
-            self.logger.log(f"{strategy.name} profit: {profit:.2f}")
+
+        prices: List[float] = []
+        for i, price in enumerate(
+            self.data_service.stream_prices(limit=iterations, interval=interval)
+        ):
+            prices.append(price)
+            for result, strategy in zip(results, self.strategies):
+                result["prices"].append(price)
+                signals = strategy.generate_signals(prices)
+                last_index = len(prices) - 1
+                for j, action, strength in signals:
+                    if j != last_index:
+                        continue
+                    strength = max(0.0, min(1.0, strength))
+                    if action == "BUY" and result["balance"] > 0:
+                        amount = result["balance"] * strength
+                        result["position"] += amount / price
+                        result["balance"] -= amount
+                        result["trades"].append((i, "BUY"))
+                    elif action == "SELL" and result["position"] > 0:
+                        amount = result["position"] * strength
+                        result["balance"] += amount * price
+                        result["position"] -= amount
+                        result["trades"].append((i, "SELL"))
+            time.sleep(0)  # allow interruption in environments without real time
+
+        for result in results:
+            final_balance = result["balance"] + result["position"] * prices[-1]
+            result["profit"] = final_balance - 10000.0
+            self.logger.log(f"{result['name']} profit: {result['profit']:.2f}")
+
+        # remove helper fields
+        for result in results:
+            result.pop("balance")
+            result.pop("position")
         return results

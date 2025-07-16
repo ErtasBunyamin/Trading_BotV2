@@ -32,6 +32,5 @@ def main() -> None:
     app = TradingApp(results)
     app.run()
 
-
 if __name__ == "__main__":
     main()

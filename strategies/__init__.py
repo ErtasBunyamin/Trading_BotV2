@@ -6,6 +6,7 @@ from .bollinger import BollingerStrategy
 from .ma_cross import MACrossStrategy
 from .random_strategy import RandomStrategy
 
+
 __all__ = [
     "RSIStrategy",
     "MACDStrategy",

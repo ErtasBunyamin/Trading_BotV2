@@ -84,3 +84,4 @@ Geliştirmeye katkı sağlamak veya öneride bulunmak için lütfen pull request
 
 Lisans
 Bu proje MIT Lisansı ile lisanslanmıştır.
+Bu belgenin Ingilizce versiyonu için [README_EN.md](README_EN.md) dosyasına bakabilirsiniz.

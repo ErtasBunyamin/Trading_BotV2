@@ -1,0 +1,31 @@
+"""Relative Strength Index trading strategy."""
+
+from __future__ import annotations
+
+from typing import List
+
+
+class RSIStrategy:
+    """Buy when RSI < 30, sell when RSI > 70."""
+
+    name = "RSI"
+
+    def generate_signals(self, prices: List[float]) -> List[tuple[int, str]]:
+        signals: List[tuple[int, str]] = []
+        gains: List[float] = []
+        losses: List[float] = []
+        for i in range(1, len(prices)):
+            change = prices[i] - prices[i - 1]
+            gains.append(max(change, 0))
+            losses.append(max(-change, 0))
+            if i < 14:
+                continue
+            avg_gain = sum(gains[-14:]) / 14
+            avg_loss = sum(losses[-14:]) / 14
+            rs = avg_gain / avg_loss if avg_loss != 0 else 0
+            rsi = 100 - 100 / (1 + rs)
+            if rsi < 30:
+                signals.append((i, "BUY"))
+            elif rsi > 70:
+                signals.append((i, "SELL"))
+        return signals

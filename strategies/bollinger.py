@@ -11,8 +11,8 @@ class BollingerStrategy:
 
     name = "Bollinger"
 
-    def generate_signals(self, prices: List[float]) -> List[tuple[int, str]]:
-        signals: List[tuple[int, str]] = []
+    def generate_signals(self, prices: List[float]) -> List[tuple[int, str, float]]:
+        signals: List[tuple[int, str, float]] = []
         period = 20
         for i in range(period, len(prices)):
             window = prices[i - period : i]
@@ -21,7 +21,9 @@ class BollingerStrategy:
             upper = avg + 2 * std
             lower = avg - 2 * std
             if prices[i] < lower:
-                signals.append((i, "BUY"))
+                strength = min(1.0, (lower - prices[i]) / (upper - lower))
+                signals.append((i, "BUY", strength))
             elif prices[i] > upper:
-                signals.append((i, "SELL"))
+                strength = min(1.0, (prices[i] - upper) / (upper - lower))
+                signals.append((i, "SELL", strength))
         return signals

@@ -8,6 +8,7 @@ Binance API anahtarı ile 5 dakikada bir Bitcoin fiyatı çekme
 Kısa sürede en çok kullanılan ve güvenli 5 farklı trade stratejisinin uygulanması
 
 Her stratejiye 10.000 TL sanal bakiye ile long/short işlemlerini simüle etme
+Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyüklüğü ayarlanır
 
 Her strateji için ayrı grafik:
 

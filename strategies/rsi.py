@@ -10,8 +10,8 @@ class RSIStrategy:
 
     name = "RSI"
 
-    def generate_signals(self, prices: List[float]) -> List[tuple[int, str]]:
-        signals: List[tuple[int, str]] = []
+    def generate_signals(self, prices: List[float]) -> List[tuple[int, str, float]]:
+        signals: List[tuple[int, str, float]] = []
         gains: List[float] = []
         losses: List[float] = []
         for i in range(1, len(prices)):
@@ -25,7 +25,9 @@ class RSIStrategy:
             rs = avg_gain / avg_loss if avg_loss != 0 else 0
             rsi = 100 - 100 / (1 + rs)
             if rsi < 30:
-                signals.append((i, "BUY"))
+                strength = min(1.0, (30 - rsi) / 30)
+                signals.append((i, "BUY", strength))
             elif rsi > 70:
-                signals.append((i, "SELL"))
+                strength = min(1.0, (rsi - 70) / 30)
+                signals.append((i, "SELL", strength))
         return signals

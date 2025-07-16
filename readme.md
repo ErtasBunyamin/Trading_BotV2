@@ -1,0 +1,85 @@
+Bitcoin Trading Strategies Simulator
+Proje Amacı
+Bu uygulama, Binance API ile Bitcoin fiyatını düzenli olarak çekerek, popüler ve güvenli 5 farklı borsa stratejisini eş zamanlı olarak sanal ortamda test etmeyi ve karşılaştırmalı analiz yapmayı amaçlar. Her strateji için 10.000 TL’lik başlangıç bakiyesi ile işlem simülasyonu gerçekleştirilir ve sonuçlar detaylı grafikler ve kar/zarar tabloları ile sunulur.
+
+Özellikler
+Binance API anahtarı ile 5 dakikada bir Bitcoin fiyatı çekme
+
+Kısa sürede en çok kullanılan ve güvenli 5 farklı trade stratejisinin uygulanması
+
+Her stratejiye 10.000 TL sanal bakiye ile long/short işlemlerini simüle etme
+
+Her strateji için ayrı grafik:
+
+Fiyat eğrisi
+
+Alım noktaları (kırmızı), satım noktaları (yeşil)
+
+Toplu kar/zarar tablosu:
+
+Her stratejinin toplamda ne kadar kazandırdığı/kaybettirdiği
+
+Grafikler ve tablo arası kolay geçiş
+
+Modern ve kullanıcı dostu arayüz
+
+Kurulum
+Python 3.10+ yüklü olmalı
+
+Gerekli kütüphaneleri yükleyin:
+
+bash
+Kopyala
+Düzenle
+pip install -r requirements.txt
+Binance API Key ve Secret’ınızı settings.py veya .env dosyasına ekleyin.
+
+Kullanım
+Uygulamayı başlatın:
+
+bash
+Kopyala
+Düzenle
+python main.py
+Uygulama arayüzünde, stratejilerin performansını ve grafiklerini inceleyin.
+
+Kar/zarar tablosu ikonuna tıklayarak, tüm stratejilerin finansal özetini görün.
+
+Proje Mimarisi
+services/data_service.py : Binance’tan fiyat verisi çeker
+
+strategies/ : Her bir trade stratejisi için ayrı Python modülü
+
+services/simulation.py : Al/Sat işlemlerini ve bakiye simülasyonunu yürütür
+
+services/logger.py : Yapılan işlemleri ve strateji performansını kaydeder
+
+main.py : Uygulamanın ana akışı ve arayüz yönetimi
+
+Stratejiler
+Başlangıçta aşağıdaki örnek stratejiler kullanılacaktır:
+
+RSI (Relative Strength Index)
+
+MACD (Moving Average Convergence Divergence)
+
+Bollinger Bands
+
+MA Cross (Moving Average Cross)
+
+Custom (Kullanıcıya özgü veya sonradan eklenebilir strateji)
+
+Her stratejinin kendi kuralları ile işlemleri tetiklenir ve sonuçlar görselleştirilir.
+
+Geliştirme Planı
+Strateji algoritmaları için yeni modüller eklenebilir
+
+Arayüzde ek filtreler, indikatörler ve performans analiz panelleri geliştirilecek
+
+Gerçek trade ortamına entegrasyon ve uyarı sistemi planlanıyor
+
+Katkı ve İletişim
+Geliştirmeye katkı sağlamak veya öneride bulunmak için lütfen pull request açın ya da iletişime geçin.
+
+Lisans
+Bu proje MIT Lisansı ile lisanslanmıştır.

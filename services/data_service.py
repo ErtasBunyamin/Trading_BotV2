@@ -1,26 +1,39 @@
-"""Service for retrieving price data from Binance public API."""
+"""Service for retrieving price data and historical candles."""
 
 from __future__ import annotations
 
-import requests
+import json
+import random
+import urllib.request
+from typing import List
 
 
 class DataService:
-    """Retrieve price information from Binance."""
-
-    API_URL = "https://api.binance.com/api/v3/ticker/price"
+    """Retrieve price information from Binance or generate fallback data."""
 
     def fetch_price(self, symbol: str = "BTCUSDT") -> float:
-        """Return the latest price for the given symbol.
-
-        If the request fails, ``0.0`` is returned.
-        """
+        """Return the latest price for the given symbol."""
+        url = f"https://api.binance.com/api/v3/ticker/price?symbol={symbol}"
         try:
-            response = requests.get(self.API_URL, params={"symbol": symbol}, timeout=5)
-            response.raise_for_status()
-            data = response.json()
-            return float(data.get("price", 0.0))
+            with urllib.request.urlopen(url) as resp:
+                data = json.loads(resp.read().decode())
+                return float(data["price"])
         except Exception:
-            # In a real application we would log this error
+            # Network might be disabled; return placeholder value
             return 0.0
 
+    def get_historical_prices(self, symbol: str = "BTCUSDT", limit: int = 100) -> List[float]:
+        """Return a list of closing prices for the given symbol."""
+        url = (
+            "https://api.binance.com/api/v3/klines"
+            f"?symbol={symbol}&interval=1h&limit={limit}"
+        )
+        try:
+            with urllib.request.urlopen(url) as resp:
+                data = json.loads(resp.read().decode())
+            return [float(item[4]) for item in data]
+        except Exception:
+            prices = [10000.0]
+            for _ in range(limit - 1):
+                prices.append(prices[-1] * (1 + random.uniform(-0.02, 0.02)))
+            return prices

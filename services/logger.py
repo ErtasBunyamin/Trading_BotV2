@@ -13,4 +13,3 @@ class Logger:
     def log(self, message: str) -> None:
         """Log the provided message."""
         self._logger.info(message)
-

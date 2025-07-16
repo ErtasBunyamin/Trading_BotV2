@@ -1,15 +1,16 @@
-"""Collection of built-in trading strategies."""
+"""Collection of trading strategies."""
 
-from .rsi_strategy import RSIStrategy
-from .macd_strategy import MACDStrategy
-from .bollinger_strategy import BollingerStrategy
-from .ma_cross_strategy import MACrossStrategy
-from .custom_strategy import CustomStrategy
+from .rsi import RSIStrategy
+from .macd import MACDStrategy
+from .bollinger import BollingerStrategy
+from .ma_cross import MACrossStrategy
+from .random_strategy import RandomStrategy
+
 
 __all__ = [
     "RSIStrategy",
     "MACDStrategy",
     "BollingerStrategy",
     "MACrossStrategy",
-    "CustomStrategy",
+    "RandomStrategy",
 ]

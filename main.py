@@ -27,7 +27,8 @@ def main() -> None:
     simulation = Simulation(data_service, logger, strategies)
 
     logger.log("Application started")
-    results = simulation.run(iterations=20, interval=1.0)
+    # Fetch prices every five minutes as documented
+    results = simulation.run(iterations=20, interval=300.0)
 
     app = TradingApp(results)
     app.run()

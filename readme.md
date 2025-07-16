@@ -27,20 +27,21 @@ Kurulum
 Python 3.10+ yüklü olmalı
 
 Gerekli kütüphaneleri yükleyin:
-
-bash
-Kopyala
-Düzenle
+```
 pip install -r requirements.txt
+```
+Proje arayüz için `tkinter` ve grafikler için `matplotlib` paketlerini
+kullanmaktadır. Gerekiyorsa aşağıdaki komutla kurabilirsiniz:
+```
+pip install matplotlib
+```
 Binance API Key ve Secret’ınızı settings.py veya .env dosyasına ekleyin.
 
 Kullanım
 Uygulamayı başlatın:
-
-bash
-Kopyala
-Düzenle
+```
 python main.py
+```
 Uygulama arayüzünde, stratejilerin performansını ve grafiklerini inceleyin.
 
 Kar/zarar tablosu ikonuna tıklayarak, tüm stratejilerin finansal özetini görün.

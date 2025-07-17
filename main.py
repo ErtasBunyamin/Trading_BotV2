@@ -11,6 +11,7 @@ from strategies import (
     MACrossStrategy,
     RandomStrategy,
     CustomStrategy,
+    DynamicHybridStrategy,
 )
 
 
@@ -25,6 +26,7 @@ def main() -> None:
         MACrossStrategy(),
         RandomStrategy(),
         CustomStrategy(),
+        DynamicHybridStrategy(),
     ]
     # Request the maximum available candle history so the GUI can display
     # all available bars without limitation.

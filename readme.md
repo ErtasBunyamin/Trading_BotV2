@@ -75,6 +75,8 @@ MA Cross (Moving Average Cross)
 
 Custom (Kullanıcıya özgü veya sonradan eklenebilir strateji)
 
+Dynamic Hybrid (Uyarlanabilir eşiklerle)
+
 Her stratejinin kendi kuralları ile işlemleri tetiklenir ve sonuçlar görselleştirilir.
 
 Geliştirme Planı

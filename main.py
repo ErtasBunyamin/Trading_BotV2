@@ -10,6 +10,7 @@ from strategies import (
     BollingerStrategy,
     MACrossStrategy,
     RandomStrategy,
+    CustomStrategy,
 )
 
 
@@ -23,6 +24,7 @@ def main() -> None:
         BollingerStrategy(),
         MACrossStrategy(),
         RandomStrategy(),
+        CustomStrategy(),
     ]
     simulation = Simulation(data_service, logger, strategies)
 

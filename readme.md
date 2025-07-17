@@ -11,6 +11,8 @@ Her strateji için 10.000 TL'lik bağımsız sanal bakiye ile long/short işleml
 Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyüklüğü ayarlanır
 - İsteğe bağlı "tüm bakiye" modu her al-sat sinyalinde mevcut bakiyenin tamamını kullanır
 - Beklenen kâr %2'yi aşıyorsa sinyal gücü düşük olsa bile tüm pozisyon satılabilir
+- Her işlemde komisyon ve slipaj maliyeti simüle edilebilir
+- Kazanan işlemler arttıkça pozisyon büyüklüğü otomatik olarak artar
 
 Her strateji için ayrı grafik:
 

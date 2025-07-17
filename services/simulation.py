@@ -20,6 +20,8 @@ class Simulation:
         profit_threshold: float = 0.02,
         price_limit: int | None = 288,
         full_balance: bool = False,
+        commission_pct: float = 0.001,
+        slippage_pct: float = 0.0005,
     ) -> None:
         self.data_service = data_service
         self.logger = logger
@@ -28,6 +30,8 @@ class Simulation:
         self.profit_threshold = profit_threshold
         self.price_limit = price_limit
         self.full_balance = full_balance
+        self.commission_pct = commission_pct
+        self.slippage_pct = slippage_pct
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
@@ -42,15 +46,11 @@ class Simulation:
             # Allow strategies to prepare using the full price history
             if hasattr(strategy, "before_run"):
                 strategy.before_run(prices)
-            strategy_trailing_stop = (
-                getattr(strategy, "trailing_stop_pct", None)
-                if getattr(strategy, "trailing_stop_pct", None) is not None
-                else self.trailing_stop_pct
+            strategy_trailing_stop = getattr(
+                strategy, "trailing_stop_pct", self.trailing_stop_pct
             )
-            strategy_profit_threshold = (
-                getattr(strategy, "profit_threshold", None)
-                if getattr(strategy, "profit_threshold", None) is not None
-                else self.profit_threshold
+            strategy_profit_threshold = getattr(
+                strategy, "profit_threshold", self.profit_threshold
             )
             trade_full_balance = getattr(strategy, "trade_full_balance", self.full_balance)
 
@@ -65,13 +65,27 @@ class Simulation:
             highest_price = 0.0
             trailing_closed = 0
 
+            performance_logs: List[dict] = []
+
             for i, price in enumerate(prices):
                 if position > 0:
                     if price > highest_price:
                         highest_price = price
-                    elif price <= highest_price * (1 - strategy_trailing_stop):
+                    strategy_trailing_stop = getattr(
+                        strategy, "trailing_stop_pct", self.trailing_stop_pct
+                    )
+                    if price <= highest_price * (1 - strategy_trailing_stop):
                         balance += position * price
                         trades.append((i, "SELL", position, price, balance))
+                        performance_logs.append(
+                            {
+                                "idx": i,
+                                "action": "SELL",
+                                "amount": position,
+                                "price": price,
+                                "reason": "trailing",
+                            }
+                        )
                         sold_total += position
                         position = 0.0
                         position_cost = 0.0
@@ -86,17 +100,38 @@ class Simulation:
                         strength = 1.0
 
                     if action == "BUY" and balance > 0:
+                        trade_price = price * (1 + self.slippage_pct)
                         cost = balance * strength
-                        amount = cost / price
+                        commission = cost * self.commission_pct
+                        total_cost = cost + commission
+                        if total_cost > balance:
+                            cost = balance / (1 + self.commission_pct)
+                            commission = cost * self.commission_pct
+                            total_cost = cost + commission
+                        amount = cost / trade_price
                         position += amount
-                        balance -= cost
-                        position_cost += cost
-                        trades.append((i, "BUY", amount, price, balance))
+                        balance -= total_cost
+                        position_cost += total_cost
+                        trades.append((i, "BUY", amount, trade_price, balance))
+                        performance_logs.append(
+                            {
+                                "idx": i,
+                                "action": "BUY",
+                                "amount": amount,
+                                "price": trade_price,
+                                "commission": commission,
+                                "slippage": trade_price - price,
+                                "scale": strength,
+                            }
+                        )
                         bought_total += amount
                         if price > highest_price:
                             highest_price = price
                     elif action == "SELL" and position > 0:
                         potential_profit = position * price - position_cost
+                        strategy_profit_threshold = getattr(
+                            strategy, "profit_threshold", self.profit_threshold
+                        )
                         if trade_full_balance:
                             amount = position
                         elif (
@@ -109,11 +144,25 @@ class Simulation:
                             amount = position * strength
                         if amount > position:
                             amount = position
+                        trade_price = price * (1 - self.slippage_pct)
+                        revenue = amount * trade_price
+                        commission = revenue * self.commission_pct
                         sell_cost = (position_cost / position) * amount
-                        balance += amount * price
+                        balance += revenue - commission
                         position -= amount
                         position_cost -= sell_cost
-                        trades.append((i, "SELL", amount, price, balance))
+                        trades.append((i, "SELL", amount, trade_price, balance))
+                        performance_logs.append(
+                            {
+                                "idx": i,
+                                "action": "SELL",
+                                "amount": amount,
+                                "price": trade_price,
+                                "commission": commission,
+                                "slippage": price - trade_price,
+                                "scale": strength,
+                            }
+                        )
                         sold_total += amount
                         if position == 0:
                             highest_price = 0.0
@@ -124,11 +173,19 @@ class Simulation:
             profit = final_value - 10000.0
             profit_pct = (profit / 10000.0) * 100
 
+            strategy_trailing_stop = getattr(
+                strategy, "trailing_stop_pct", self.trailing_stop_pct
+            )
+            strategy_profit_threshold = getattr(
+                strategy, "profit_threshold", self.profit_threshold
+            )
+
             results.append(
                 {
                     "name": strategy.name,
                     "prices": prices,
                     "trades": trades,
+                    "details": performance_logs,
                     "profit": profit,
                     "final_balance": final_value,
                     "profit_pct": profit_pct,

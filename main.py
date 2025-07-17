@@ -36,6 +36,8 @@ def main() -> None:
         strategies,
         price_limit=None,
         full_balance=False,
+        commission_pct=0.001,
+        slippage_pct=0.0005,
     )
 
     logger.log("Application started")

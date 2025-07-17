@@ -3,7 +3,9 @@
 This strategy aggregates signals from several indicators and adjusts
 its decision threshold based on market regime and recent performance of
 each indicator. It also factors in the current price location within a
-lookback window and the short-term trend direction.
+lookback window and the short-term trend direction. Trade size scales
+dynamically with recent wins and trend strength, and optional
+correlation analysis can reduce risk when assets move together.
 """
 
 from __future__ import annotations
@@ -50,6 +52,10 @@ class DynamicHybridStrategy:
         session_thresholds: Dict[Tuple[int, int], float] | None = None,
         atr_stop_mult: float = 1.5,
         atr_profit_mult: float = 2.0,
+        scale_step: float = 0.05,
+        scale_max: float = 2.0,
+        correlation_threshold: float = 0.8,
+        correlation_penalty: float = 0.5,
         log_decisions: bool = True,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
@@ -85,10 +91,16 @@ class DynamicHybridStrategy:
         self.session_thresholds = session_thresholds or {}
         self.atr_stop_mult = atr_stop_mult
         self.atr_profit_mult = atr_profit_mult
+        self.scale_step = scale_step
+        self.scale_max = scale_max
+        self.correlation_threshold = correlation_threshold
+        self.correlation_penalty = correlation_penalty
         self.log_decisions = log_decisions
 
         # Runtime state
         self.loss_streak = 0
+        self.profit_streak = 0
+        self.scale_factor = 1.0
         self._atr_values: List[float] = []
         self.decision_log: List[Tuple[int, str]] = []
 
@@ -196,15 +208,22 @@ class DynamicHybridStrategy:
                 return factor
         return 1.0
 
-    def _update_drawdown(self, trade_logs: List[Dict]) -> None:
-        """Update consecutive loss streak for risk adjustment."""
+    def _update_performance(self, trade_logs: List[Dict]) -> None:
+        """Adjust win/loss streaks and trade scale based on last trade."""
         if not trade_logs:
             return
         last_pnl = trade_logs[-1].get("pnl", 0)
         if last_pnl <= 0:
             self.loss_streak += 1
+            self.profit_streak = 0
+            self.scale_factor = max(1.0, self.scale_factor - self.scale_step)
         else:
             self.loss_streak = 0
+            self.profit_streak += 1
+            if self.market_regime == "trend":
+                self.scale_factor = min(
+                    self.scale_max, self.scale_factor + self.scale_step
+                )
 
     def generate_signals(
         self,
@@ -212,6 +231,7 @@ class DynamicHybridStrategy:
         strat_signals: List[Tuple[int, str, float, str]] | None = None,
         trade_logs: List[Dict] | None = None,
         volumes: List[float] | None = None,
+        other_assets: List[List[float]] | None = None,
     ) -> List[Tuple[int, str, float]]:
         """Aggregate indicator signals and return trading decisions."""
 
@@ -240,7 +260,7 @@ class DynamicHybridStrategy:
                         trade_logs.append({"indicator": ind, "pnl": pnl})
 
         self.update_winrates(trade_logs)
-        self._update_drawdown(trade_logs)
+        self._update_performance(trade_logs)
 
         if self.trailing_stop_pct is None or self.profit_threshold is None:
             base_atr = self._average_true_range(prices[-self.atr_period :])
@@ -294,7 +314,9 @@ class DynamicHybridStrategy:
             # Update stop levels dynamically with current ATR
             if prices[idx] > 0:
                 self.trailing_stop_pct = (atr * self.atr_stop_mult) / prices[idx]
-                self.profit_threshold = (atr * self.atr_profit_mult) / prices[idx]
+                base_profit = atr * self.atr_profit_mult
+            else:
+                base_profit = atr * self.atr_profit_mult
 
             self.detect_market_regime(prices[: idx + 1])
             score = self.dynamic_voting(indicator_map)
@@ -327,6 +349,12 @@ class DynamicHybridStrategy:
                 elif prices[idx] < ema:
                     score -= self.momentum_weight
 
+            # Adjust take-profit width based on signal strength
+            if prices[idx] > 0:
+                self.profit_threshold = (
+                    base_profit * (1 + min(1.0, abs(score))) / prices[idx]
+                )
+
             threshold = self.get_threshold()
             dynamic_conf = self.confidence_threshold
             dynamic_dist = self.min_signal_distance
@@ -348,12 +376,25 @@ class DynamicHybridStrategy:
                 continue
 
             # Risk based strength scaling
-            risk_scale = 1.0
+            risk_scale = self.scale_factor
             if atr_avg > 0:
                 volatility_factor = atr / atr_avg
                 risk_scale /= max(1.0, volatility_factor ** self.risk_atr_scale)
             if self.loss_streak > self.drawdown_lookback:
-                risk_scale *= self.drawdown_penalty ** (self.loss_streak - self.drawdown_lookback)
+                risk_scale *= self.drawdown_penalty ** (
+                    self.loss_streak - self.drawdown_lookback
+                )
+
+            if other_assets is not None:
+                for series in other_assets:
+                    if len(series) > idx and idx >= 2:
+                        base_slice = series[max(0, idx - self.lookback + 1) : idx + 1]
+                        corr = np.corrcoef(
+                            np.diff(window), np.diff(base_slice)
+                        )[0, 1]
+                        if abs(corr) >= self.correlation_threshold:
+                            risk_scale *= self.correlation_penalty
+                            break
 
             if score >= threshold:
                 strength = min(1.0, abs(score) * risk_scale)
@@ -374,3 +415,37 @@ class DynamicHybridStrategy:
 # strategy = DynamicHybridStrategy()
 # signals = strategy.generate_signals(prices, volumes=volumes)
 # print("Decision log", strategy.decision_log[:5])
+
+    def optimize_parameters(
+        self, prices: List[float], param_grid: Dict[str, List[float]]
+    ) -> Dict[str, float]:
+        """Simple grid search returning the best performing parameters."""
+        best_profit = float("-inf")
+        best_params: Dict[str, float] = {}
+        original = {
+            "base_threshold": self.base_threshold,
+            "lookback": self.lookback,
+        }
+        grid_base = param_grid.get("base_threshold", [self.base_threshold])
+        grid_look = param_grid.get("lookback", [self.lookback])
+        for b in grid_base:
+            for l in grid_look:
+                self.base_threshold = b
+                self.lookback = l
+                signals = self.generate_signals(prices)
+                balance = 0.0
+                position = 0.0
+                for idx, action, strength in signals:
+                    if action == "BUY":
+                        position += strength
+                        balance -= strength * prices[idx]
+                    else:
+                        position -= strength
+                        balance += strength * prices[idx]
+                final = balance + position * prices[-1]
+                if final > best_profit:
+                    best_profit = final
+                    best_params = {"base_threshold": b, "lookback": l}
+        self.base_threshold = original["base_threshold"]
+        self.lookback = original["lookback"]
+        return best_params

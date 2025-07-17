@@ -1,12 +1,12 @@
 # Bitcoin Trading Strategies Simulator
 
 ## Project Purpose
-This application aims to regularly fetch the Bitcoin price using the Binance API and simulate five popular and safe trading strategies simultaneously in a virtual environment for comparison. Each strategy starts with a virtual balance of 10,000 TL, and the results are presented with detailed graphs and profit/loss tables.
+This application aims to regularly fetch the Bitcoin price using the Binance API and simulate five popular and safe trading strategies simultaneously in a virtual environment for comparison. All strategies share a single virtual balance of 10,000 TL, and the results are presented with detailed graphs and profit/loss tables.
 
 ## Features
 - Fetch the Bitcoin price every five minutes using your Binance API key
 - Apply the five most commonly used and trusted trading strategies
-- Simulate long/short trades with a virtual balance of 10,000 TL for each strategy
+- Simulate long/short trades with a shared virtual balance of 10,000 TL
 - Real-time buy/sell simulation adjusts position size according to signal strength
 - Separate graph for each strategy:
   - Price curve

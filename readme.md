@@ -9,7 +9,15 @@ Kısa sürede en çok kullanılan ve güvenli 5 farklı trade stratejisinin uygu
 
 Her strateji için 10.000 TL'lik bağımsız sanal bakiye ile long/short işlemlerini simüle etme
 Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyüklüğü ayarlanır
+- İsteğe bağlı "tüm bakiye" modu her al-sat sinyalinde mevcut bakiyenin tamamını kullanır
 - Beklenen kâr %2'yi aşıyorsa sinyal gücü düşük olsa bile tüm pozisyon satılabilir
+- Her işlemde komisyon ve slipaj maliyeti simüle edilebilir
+- Kazanan işlemler arttıkça pozisyon büyüklüğü otomatik olarak artar
+- Volatilite ve sinyal gücüne göre dinamik kar al ve trailing-stop seviyeleri
+- EMA kesişimi ve hacim kırılımı ilk küçük pozisyonu tetikler, trend
+  onaylandıkça kademeli alım yapılır
+- Kaçan fırsatları yakalamak için eşik otomatik düşürülür
+- Kâr tablosu gerçekleşen kazanç ile kaçan fırsatlardan doğabilecek maksimum kârı karşılaştırır
 
 Her strateji için ayrı grafik:
 
@@ -75,6 +83,11 @@ MA Cross (Moving Average Cross)
 
 Custom (Kullanıcıya özgü veya sonradan eklenebilir strateji)
 
+Dynamic Hybrid (ATR & hacim filtresi, uyarlanabilir risk yönetimi, seans
+eşikleri, piyasa rejimi algısı, çoklu zaman dilimi trend filtreleri, komisyon/slipaj simülasyonu ve parametre optimizasyonu)
+kaçan fırsatları tespit ederek otomatik alım/satım yapar, eşiği dinamik düşürür
+Grafikte kaçan fırsatlar özel işaretlerle gösterilir, potansiyel ve beklenen kar ayrı tabloda listelenir
+
 Her stratejinin kendi kuralları ile işlemleri tetiklenir ve sonuçlar görselleştirilir.
 
 Geliştirme Planı
@@ -90,3 +103,15 @@ Geliştirmeye katkı sağlamak veya öneride bulunmak için lütfen pull request
 Lisans
 Bu proje MIT Lisansı ile lisanslanmıştır.
 Bu belgenin Ingilizce versiyonu için [README_EN.md](README_EN.md) dosyasına bakabilirsiniz.
+
+### Parametre Ayarlama Örneği
+```python
+from strategies.dynamic_hybrid import DynamicHybridStrategy
+from services.data_service import DataService
+
+prices = DataService().get_historical_prices(limit=500)
+strategy = DynamicHybridStrategy()
+grid = {"base_threshold": [0.1, 0.15], "lookback": [40, 60]}
+best = strategy.optimize_by_regime(prices, grid)
+print(best)
+```

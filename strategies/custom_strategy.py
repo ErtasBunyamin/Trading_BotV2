@@ -11,7 +11,15 @@ from .rsi import RSIStrategy
 
 
 class CustomStrategy:
-    """Generate signals based on a consensus of other strategies."""
+    """Generate signals based on a consensus of other strategies.
+
+    ``threshold`` controls how strong the combined score must be before
+    emitting a signal. ``lookback`` defines how many previous prices are
+    examined to determine the market position, and ``location_weight``
+    specifies how much that position influences the final score.
+    ``trend_weight`` adjusts the impact of the recent price trend
+    direction on the final decision.
+    """
 
     name = "Hybrid"
 
@@ -19,9 +27,17 @@ class CustomStrategy:
         self,
         profit_threshold: float | None = None,
         trailing_stop_pct: float | None = None,
+        threshold: float = 0.5,
+        lookback: int = 20,
+        location_weight: float = 0.5,
+        trend_weight: float = 0.0,
     ) -> None:
         self.profit_threshold = profit_threshold
         self.trailing_stop_pct = trailing_stop_pct
+        self.threshold = threshold
+        self.lookback = lookback
+        self.location_weight = location_weight
+        self.trend_weight = trend_weight
         self._strategies = [
             RSIStrategy(profit_threshold, trailing_stop_pct),
             MACDStrategy(profit_threshold, trailing_stop_pct),
@@ -49,10 +65,28 @@ class CustomStrategy:
                     score += strength
                 elif action == "SELL":
                     score -= strength
-            if score >= 1.0:
+            if i >= self.lookback:
+                window = prices[i - self.lookback : i + 1]
+                low = min(window)
+                high = max(window)
+                if high != low:
+                    pos = (prices[i] - low) / (high - low)
+                    score += (0.5 - pos) * 2 * self.location_weight
+                if self.trend_weight:
+                    n = len(window)
+                    xs = list(range(n))
+                    mean_x = sum(xs) / n
+                    mean_y = sum(window) / n
+                    num = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, window))
+                    den = sum((x - mean_x) ** 2 for x in xs)
+                    slope = num / den if den != 0 else 0.0
+                    trend = slope * n / window[-1]
+                    trend = max(-1.0, min(1.0, trend))
+                    score += trend * self.trend_weight
+            if score >= self.threshold:
                 strength = min(1.0, abs(score) / len(strategy_maps))
                 signals.append((i, "BUY", strength))
-            elif score <= -1.0:
+            elif score <= -self.threshold:
                 strength = min(1.0, abs(score) / len(strategy_maps))
                 signals.append((i, "SELL", strength))
         return signals

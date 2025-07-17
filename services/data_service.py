@@ -23,19 +23,28 @@ class DataService:
             return 0.0
 
     def get_historical_prices(
-        self, symbol: str = "BTCUSDT", limit: int = 100, interval: str = "1h"
+        self, symbol: str = "BTCUSDT", limit: int | None = 100, interval: str = "1h"
     ) -> List[float]:
-        """Return a list of closing prices for the given symbol."""
-        url = (
-            "https://api.binance.com/api/v3/klines"
-            f"?symbol={symbol}&interval={interval}&limit={limit}"
-        )
+        """Return a list of closing prices for the given symbol.
+
+        ``limit`` controls how many candles to retrieve. ``None`` attempts to
+        fetch the maximum allowed by the API (1000).
+        """
+        base = "https://api.binance.com/api/v3/klines"
+        if limit is None:
+            url = f"{base}?symbol={symbol}&interval={interval}"
+            fallback_len = 1000
+        else:
+            url = f"{base}?symbol={symbol}&interval={interval}&limit={limit}"
+            fallback_len = limit
         try:
             with urllib.request.urlopen(url) as resp:
                 data = json.loads(resp.read().decode())
             return [float(item[4]) for item in data]
         except Exception:
+            if fallback_len is None:
+                fallback_len = 1000
             prices = [10000.0]
-            for _ in range(limit - 1):
+            for _ in range(fallback_len - 1):
                 prices.append(prices[-1] * (1 + random.uniform(-0.02, 0.02)))
             return prices

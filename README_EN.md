@@ -8,6 +8,15 @@ This application aims to regularly fetch the Bitcoin price using the Binance API
 - Apply the five most commonly used and trusted trading strategies
 - Simulate long/short trades with an independent 10,000 TL balance for each strategy
 - Real-time buy/sell simulation adjusts position size according to signal strength
+- Optional "full balance" mode executes each trade with the entire balance for easier comparison
+- Commission and slippage costs can be simulated for each trade
+- Adaptive position scaling reacts to winning streaks and market trend
+- Dynamic take-profit and trailing-stop levels adjust with volatility and signal strength
+- Adaptive opportunity trigger lowers the threshold after missed moves
+- Missed opportunities are marked on charts and summarized with potential profit
+- Profit table compares realized profit with expected profit if missed trades were taken
+- EMA cross and volume breakout detection trigger initial trades with a small
+  position which can pyramid as the trend confirms
 - Sells may override the signal strength and liquidate the entire position when the expected profit exceeds 2%
 - Separate graph for each strategy:
   - Price curve
@@ -51,6 +60,9 @@ Initially, the following example strategies will be used:
 - Bollinger Bands
 - MA Cross (Moving Average Cross)
 - Custom (User defined or added later)
+- Dynamic Hybrid (ATR & volume filters, adaptive risk management, session-aware
+ thresholds, market regime detection, multi-timeframe trend filters, commission/slippage simulation and parameter optimization)
+  with missed-opportunity detection, automatic trading of missed signals, adaptive thresholding, and an expected-profit table
 Each strategy triggers trades according to its own rules and visualizes the results.
 
 ## Development Plan
@@ -65,3 +77,15 @@ Please open a pull request or contact us if you would like to contribute or make
 This project is licensed under the MIT License.
 
 For the Turkish version of this document, see [readme.md](readme.md).
+
+### Example Parameter Tuning
+```python
+from strategies.dynamic_hybrid import DynamicHybridStrategy
+from services.data_service import DataService
+
+prices = DataService().get_historical_prices(limit=500)
+strategy = DynamicHybridStrategy()
+grid = {"base_threshold": [0.1, 0.15], "lookback": [40, 60]}
+best = strategy.optimize_by_regime(prices, grid)
+print(best)
+```

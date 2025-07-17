@@ -11,6 +11,7 @@ from strategies import (
     MACrossStrategy,
     RandomStrategy,
     CustomStrategy,
+    DynamicHybridStrategy,
 )
 
 
@@ -25,8 +26,20 @@ def main() -> None:
         MACrossStrategy(),
         RandomStrategy(),
         CustomStrategy(),
+        DynamicHybridStrategy(),
     ]
-    simulation = Simulation(data_service, logger, strategies)
+    # Request the maximum available candle history so the GUI can display
+    # all available bars without limitation.
+    simulation = Simulation(
+        data_service,
+        logger,
+        strategies,
+        price_limit=None,
+        full_balance=True,
+        commission_pct=0.001,
+        slippage_pct=0.0005,
+        min_trade_size=0.0001,
+    )
 
     logger.log("Application started")
     results = simulation.run()

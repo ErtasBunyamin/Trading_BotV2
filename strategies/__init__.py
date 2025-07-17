@@ -6,6 +6,7 @@ from .bollinger import BollingerStrategy
 from .ma_cross import MACrossStrategy
 from .random_strategy import RandomStrategy
 from .custom_strategy import CustomStrategy
+from .dynamic_hybrid import DynamicHybridStrategy
 
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "MACrossStrategy",
     "RandomStrategy",
     "CustomStrategy",
+    "DynamicHybridStrategy",
 ]

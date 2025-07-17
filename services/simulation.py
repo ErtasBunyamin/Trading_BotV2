@@ -52,6 +52,12 @@ class Simulation:
             strategy_profit_threshold = getattr(
                 strategy, "profit_threshold", self.profit_threshold
             )
+            strategy_commission_pct = getattr(
+                strategy, "commission_pct", self.commission_pct
+            )
+            strategy_slippage_pct = getattr(
+                strategy, "slippage_pct", self.slippage_pct
+            )
             trade_full_balance = getattr(strategy, "trade_full_balance", self.full_balance)
 
             signals = strategy.generate_signals(prices)
@@ -105,14 +111,14 @@ class Simulation:
                         strength = 1.0
 
                     if action == "BUY" and balance > 0:
-                        trade_price = price * (1 + self.slippage_pct)
+                        trade_price = price * (1 + strategy_slippage_pct)
                         cost = balance * strength
-                        commission = cost * self.commission_pct
+                        commission = cost * strategy_commission_pct
                         total_cost = cost + commission
                         if total_cost > balance:
-                            cost = balance / (1 + self.commission_pct)
-                            commission = cost * self.commission_pct
-                            total_cost = cost + commission
+                            cost = balance / (1 + strategy_commission_pct)
+                            commission = cost * strategy_commission_pct
+                        total_cost = cost + commission
                         amount = cost / trade_price
                         position += amount
                         balance -= total_cost
@@ -127,6 +133,10 @@ class Simulation:
                                 "commission": commission,
                                 "slippage": trade_price - price,
                                 "scale": strength,
+                                "position_after": position,
+                                "balance_after": balance,
+                                "tp_pct": strategy_profit_threshold,
+                                "ts_pct": strategy_trailing_stop,
                             }
                         )
                         bought_total += amount
@@ -150,11 +160,13 @@ class Simulation:
                             amount = position * strength
                         if amount > position:
                             amount = position
-                        trade_price = price * (1 - self.slippage_pct)
+                        trade_price = price * (1 - strategy_slippage_pct)
                         revenue = amount * trade_price
-                        commission = revenue * self.commission_pct
+                        commission = revenue * strategy_commission_pct
                         sell_cost = (position_cost / position) * amount
-                        balance += revenue - commission
+                        pnl = revenue - commission - sell_cost
+                        balance += sell_cost + pnl
+                        # position_cost already reduced below
                         position -= amount
                         position_cost -= sell_cost
                         trades.append((i, "SELL", amount, trade_price, balance))
@@ -167,6 +179,11 @@ class Simulation:
                                 "commission": commission,
                                 "slippage": price - trade_price,
                                 "scale": strength,
+                                "position_after": position,
+                                "balance_after": balance,
+                                "tp_pct": strategy_profit_threshold,
+                                "ts_pct": strategy_trailing_stop,
+                                "pnl": pnl,
                             }
                         )
                         sold_total += amount

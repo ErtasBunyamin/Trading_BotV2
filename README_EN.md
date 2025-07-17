@@ -58,7 +58,7 @@ Initially, the following example strategies will be used:
 - MA Cross (Moving Average Cross)
 - Custom (User defined or added later)
 - Dynamic Hybrid (ATR & volume filters, adaptive risk management, session-aware
-  thresholds, market regime detection and multi-timeframe trend filters)
+ thresholds, market regime detection, multi-timeframe trend filters, commission/slippage simulation and parameter optimization)
 Each strategy triggers trades according to its own rules and visualizes the results.
 
 ## Development Plan

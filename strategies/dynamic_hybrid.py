@@ -78,6 +78,8 @@ class DynamicHybridStrategy:
         multi_tf_weight: float = 0.0,
         higher_lookback: int = 100,
         sentiment_weight: float = 0.0,
+        commission_pct: float = 0.001,
+        slippage_pct: float = 0.0005,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -145,6 +147,8 @@ class DynamicHybridStrategy:
         self.multi_tf_weight = multi_tf_weight
         self.higher_lookback = higher_lookback
         self.sentiment_weight = sentiment_weight
+        self.commission_pct = commission_pct
+        self.slippage_pct = slippage_pct
 
         self._base_threshold_default = base_threshold
         self._min_distance_default = min_signal_distance
@@ -500,20 +504,7 @@ class DynamicHybridStrategy:
             ):
                 score += (sentiment[idx] - 0.5) * 2 * self.sentiment_weight
 
-            # Volatility based take-profit and trailing stop
-            if prices[idx] > 0:
-                ema_window = (
-                    pd.Series(window)
-                    .ewm(span=min(len(window), self.lookback))
-                    .mean()
-                    .iloc[-1]
-                )
-                spread = abs(prices[idx] - ema_window) / prices[idx]
-                dyn = 1 + min(1.0, abs(score))
-                profit_base = atr * self.atr_profit_mult * (1 + spread)
-                stop_base = atr * self.atr_stop_mult * (1 + spread)
-                self.profit_threshold = profit_base * dyn / prices[idx]
-                self.trailing_stop_pct = stop_base * dyn / prices[idx]
+
 
             threshold = self.get_threshold()
             dynamic_conf = self.confidence_threshold
@@ -570,6 +561,25 @@ class DynamicHybridStrategy:
                             risk_scale *= self.correlation_penalty
                             break
 
+            # adjust TP and trailing stop with risk scale and score
+            if prices[idx] > 0:
+                ema_window = (
+                    pd.Series(window)
+                    .ewm(span=min(len(window), self.lookback))
+                    .mean()
+                    .iloc[-1]
+                )
+                spread = abs(prices[idx] - ema_window) / prices[idx]
+                dyn = 1 + min(1.0, abs(score))
+                profit_base = atr * self.atr_profit_mult * (1 + spread)
+                stop_base = atr * self.atr_stop_mult * (1 + spread)
+                self.profit_threshold = (
+                    profit_base * dyn * risk_scale / prices[idx]
+                )
+                self.trailing_stop_pct = (
+                    stop_base * dyn * risk_scale / prices[idx]
+                )
+
             # --- Trend start detection (EMA cross or volume breakout) ---
             cross_up = False
             if idx >= self.ema_long:
@@ -590,7 +600,12 @@ class DynamicHybridStrategy:
             opened = False
             # Entry or pyramiding logic
             if self.position == 0 and (cross_up or vol_break) and score >= threshold:
-                strength = min(1.0, self.base_position_size * risk_scale)
+                strength = min(
+                    1.0,
+                    self.base_position_size
+                    * risk_scale
+                    * max(0.5, abs(score)),
+                )
                 final_signals.append((idx, "BUY", strength))
                 self.position += strength
                 self.entry_price = prices[idx]
@@ -599,7 +614,9 @@ class DynamicHybridStrategy:
                 self.pyramid_count = 1
                 self.trailing_stop_pct = (atr * 1.2) / prices[idx]
                 if self.log_decisions:
-                    self.decision_log.append((idx, f"BUY entry {strength:.2f}"))
+                    self.decision_log.append(
+                        (idx, f"BUY entry {strength:.2f} scale {risk_scale:.2f}")
+                    )
                 last_idx = idx
                 opened = True
             elif (
@@ -608,13 +625,23 @@ class DynamicHybridStrategy:
                 and score >= threshold * 1.2
                 and prices[idx] >= self.last_buy_price * (1 + self.pyramid_step_pct)
             ):
-                strength = min(1.0, self.base_position_size * risk_scale)
+                strength = min(
+                    1.0,
+                    self.base_position_size
+                    * risk_scale
+                    * max(0.5, abs(score)),
+                )
                 final_signals.append((idx, "BUY", strength))
                 self.position += strength
                 self.last_buy_price = prices[idx]
                 self.pyramid_count += 1
                 if self.log_decisions:
-                    self.decision_log.append((idx, f"Pyramid {self.pyramid_count} {strength:.2f}"))
+                    self.decision_log.append(
+                        (
+                            idx,
+                            f"Pyramid {self.pyramid_count} {strength:.2f} scale {risk_scale:.2f}",
+                        )
+                    )
                 last_idx = idx
                 opened = True
 
@@ -672,6 +699,9 @@ class DynamicHybridStrategy:
 # signals = strategy.generate_signals(prices)
 # print("First 5 decisions", signals[:5])
 # print("Why trades were skipped", strategy.decision_log[:5])
+# grid = {"base_threshold": [0.1, 0.15], "lookback": [40, 60]}
+# best = strategy.optimize_by_regime(prices, grid)
+# print("Best params per regime", best)
 
     def optimize_parameters(
         self, prices: List[float], param_grid: Dict[str, List[float]]
@@ -713,3 +743,26 @@ class DynamicHybridStrategy:
         self.base_threshold = original["base_threshold"]
         self.lookback = original["lookback"]
         return best_params
+
+    def optimize_by_regime(
+        self, prices: List[float], param_grid: Dict[str, List[float]]
+    ) -> Dict[str, Dict[str, float]]:
+        """Run grid search per detected regime and return best params."""
+        segments: List[Tuple[str, List[float]]] = []
+        regime = None
+        start = 0
+        for i in range(self.lookback, len(prices)):
+            self.detect_market_regime(prices[i - self.lookback : i])
+            cur = self.market_regime
+            if regime is None:
+                regime = cur
+            elif cur != regime:
+                segments.append((regime, prices[start:i]))
+                regime = cur
+                start = i - self.lookback
+        segments.append((regime or "trend", prices[start:]))
+
+        best_by_regime: Dict[str, Dict[str, float]] = {}
+        for reg, seg_prices in segments:
+            best_by_regime[reg] = self.optimize_parameters(seg_prices, param_grid)
+        return best_by_regime

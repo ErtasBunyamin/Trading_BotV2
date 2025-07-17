@@ -5,6 +5,7 @@ from .macd import MACDStrategy
 from .bollinger import BollingerStrategy
 from .ma_cross import MACrossStrategy
 from .random_strategy import RandomStrategy
+from .custom_strategy import CustomStrategy
 
 
 __all__ = [
@@ -13,4 +14,5 @@ __all__ = [
     "BollingerStrategy",
     "MACrossStrategy",
     "RandomStrategy",
+    "CustomStrategy",
 ]

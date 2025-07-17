@@ -11,7 +11,12 @@ from .rsi import RSIStrategy
 
 
 class CustomStrategy:
-    """Generate signals based on a consensus of other strategies."""
+    """Generate signals based on a consensus of other strategies.
+
+    The ``threshold`` value controls how strong the combined score must be
+    before emitting a signal.  A lower threshold results in more frequent
+    signals.
+    """
 
     name = "Hybrid"
 
@@ -19,9 +24,11 @@ class CustomStrategy:
         self,
         profit_threshold: float | None = None,
         trailing_stop_pct: float | None = None,
+        threshold: float = 0.5,
     ) -> None:
         self.profit_threshold = profit_threshold
         self.trailing_stop_pct = trailing_stop_pct
+        self.threshold = threshold
         self._strategies = [
             RSIStrategy(profit_threshold, trailing_stop_pct),
             MACDStrategy(profit_threshold, trailing_stop_pct),
@@ -49,10 +56,10 @@ class CustomStrategy:
                     score += strength
                 elif action == "SELL":
                     score -= strength
-            if score >= 1.0:
+            if score >= self.threshold:
                 strength = min(1.0, abs(score) / len(strategy_maps))
                 signals.append((i, "BUY", strength))
-            elif score <= -1.0:
+            elif score <= -self.threshold:
                 strength = min(1.0, abs(score) / len(strategy_maps))
                 signals.append((i, "SELL", strength))
         return signals

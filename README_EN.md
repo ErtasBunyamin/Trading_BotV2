@@ -8,6 +8,7 @@ This application aims to regularly fetch the Bitcoin price using the Binance API
 - Apply the five most commonly used and trusted trading strategies
 - Simulate long/short trades with an independent 10,000 TL balance for each strategy
 - Real-time buy/sell simulation adjusts position size according to signal strength
+- Sells may override the signal strength and liquidate the entire position when the expected profit exceeds 2%
 - Separate graph for each strategy:
   - Price curve
   - Buy points (red), sell points (green)

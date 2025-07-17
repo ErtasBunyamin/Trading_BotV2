@@ -9,6 +9,7 @@ Kısa sürede en çok kullanılan ve güvenli 5 farklı trade stratejisinin uygu
 
 Her strateji için 10.000 TL'lik bağımsız sanal bakiye ile long/short işlemlerini simüle etme
 Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyüklüğü ayarlanır
+- Beklenen kâr %2'yi aşıyorsa sinyal gücü düşük olsa bile tüm pozisyon satılabilir
 
 Her strateji için ayrı grafik:
 

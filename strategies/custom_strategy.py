@@ -13,9 +13,10 @@ from .rsi import RSIStrategy
 class CustomStrategy:
     """Generate signals based on a consensus of other strategies.
 
-    The ``threshold`` value controls how strong the combined score must be
-    before emitting a signal.  A lower threshold results in more frequent
-    signals.
+    ``threshold`` controls how strong the combined score must be before
+    emitting a signal. ``lookback`` defines how many previous prices are
+    examined to determine the market position, and ``location_weight``
+    specifies how much that position influences the final score.
     """
 
     name = "Hybrid"
@@ -25,10 +26,14 @@ class CustomStrategy:
         profit_threshold: float | None = None,
         trailing_stop_pct: float | None = None,
         threshold: float = 0.5,
+        lookback: int = 20,
+        location_weight: float = 0.5,
     ) -> None:
         self.profit_threshold = profit_threshold
         self.trailing_stop_pct = trailing_stop_pct
         self.threshold = threshold
+        self.lookback = lookback
+        self.location_weight = location_weight
         self._strategies = [
             RSIStrategy(profit_threshold, trailing_stop_pct),
             MACDStrategy(profit_threshold, trailing_stop_pct),
@@ -56,6 +61,13 @@ class CustomStrategy:
                     score += strength
                 elif action == "SELL":
                     score -= strength
+            if i >= self.lookback:
+                window = prices[i - self.lookback : i + 1]
+                low = min(window)
+                high = max(window)
+                if high != low:
+                    pos = (prices[i] - low) / (high - low)
+                    score += (0.5 - pos) * 2 * self.location_weight
             if score >= self.threshold:
                 strength = min(1.0, abs(score) / len(strategy_maps))
                 signals.append((i, "BUY", strength))

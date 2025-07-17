@@ -80,21 +80,25 @@ class TradingApp:
         tree.heading("profit_threshold", text="Profit Th")
         tree.heading("trailing_stop", text="Trailing %")
         tree.pack(fill="both", expand=True)
+        def fmt(value: float | None, fmt_str: str = ".2f") -> str:
+            """Return formatted float or '-' when value is ``None``."""
+            return f"{value:{fmt_str}}" if value is not None else "-"
+
         for result in self.results:
             tree.insert(
                 "",
                 tk.END,
                 values=(
                     result["name"],
-                    f"{result['profit']:.2f}",
-                    f"{result['profit_pct']:.2f}",
-                    f"{result['final_balance']:.2f}",
-                    f"{result['bought']:.4f}",
-                    f"{result['sold']:.4f}",
-                    f"{result['remaining_btc']:.4f}",
-                    f"{result['holding_value']:.2f}",
-                    f"{result['profit_threshold']:.2f}",
-                    f"{result['trailing_stop_pct']:.2f}",
+                    fmt(result.get("profit")),
+                    fmt(result.get("profit_pct")),
+                    fmt(result.get("final_balance")),
+                    fmt(result.get("bought"), ".4f"),
+                    fmt(result.get("sold"), ".4f"),
+                    fmt(result.get("remaining_btc"), ".4f"),
+                    fmt(result.get("holding_value")),
+                    fmt(result.get("profit_threshold")),
+                    fmt(result.get("trailing_stop_pct")),
                 ),
             )
 

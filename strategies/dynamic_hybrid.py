@@ -57,6 +57,8 @@ class DynamicHybridStrategy:
         correlation_threshold: float = 0.8,
         correlation_penalty: float = 0.5,
         log_decisions: bool = True,
+        auto_tune_window: int = 50,
+        auto_tune_step: float = 0.05,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -96,6 +98,12 @@ class DynamicHybridStrategy:
         self.correlation_threshold = correlation_threshold
         self.correlation_penalty = correlation_penalty
         self.log_decisions = log_decisions
+        self.auto_tune_window = auto_tune_window
+        self.auto_tune_step = auto_tune_step
+
+        self._base_threshold_default = base_threshold
+        self._min_distance_default = min_signal_distance
+        self._location_weight_default = location_weight
 
         # Runtime state
         self.loss_streak = 0
@@ -225,6 +233,39 @@ class DynamicHybridStrategy:
                     self.scale_max, self.scale_factor + self.scale_step
                 )
 
+    def _auto_tune(self, trade_logs: List[Dict]) -> None:
+        """Automatically tweak main parameters when performance weakens."""
+        history = trade_logs[-self.auto_tune_window :]
+        if len(history) < self.auto_tune_window:
+            return
+        win = sum(1 for t in history if t["pnl"] > 0) / len(history)
+        profit = sum(t["pnl"] for t in history)
+        if win < self.winrate_target or profit <= 0:
+            self.base_threshold = max(
+                0.05, self.base_threshold * (1 - self.auto_tune_step)
+            )
+            self.min_signal_distance = max(
+                1, int(self.min_signal_distance * (1 - self.auto_tune_step))
+            )
+            self.location_weight = max(
+                0.0, self.location_weight * (1 - self.auto_tune_step / 2)
+            )
+            if self.log_decisions:
+                self.decision_log.append((len(trade_logs), "auto_tune"))
+        else:
+            self.base_threshold = min(
+                self.base_threshold + self.auto_tune_step * 0.1,
+                self._base_threshold_default,
+            )
+            self.min_signal_distance = min(
+                self.min_signal_distance + int(self.auto_tune_step * 0.1),
+                self._min_distance_default,
+            )
+            self.location_weight = min(
+                self.location_weight + self.auto_tune_step * 0.05,
+                self._location_weight_default,
+            )
+
     def generate_signals(
         self,
         prices: List[float],
@@ -261,6 +302,7 @@ class DynamicHybridStrategy:
 
         self.update_winrates(trade_logs)
         self._update_performance(trade_logs)
+        self._auto_tune(trade_logs)
 
         if self.trailing_stop_pct is None or self.profit_threshold is None:
             base_atr = self._average_true_range(prices[-self.atr_period :])
@@ -385,6 +427,12 @@ class DynamicHybridStrategy:
                     self.loss_streak - self.drawdown_lookback
                 )
 
+            trend_strength = abs(self._trend_score(window))
+            if trend_strength > 0.5:
+                risk_scale *= 1 + trend_strength
+            elif trend_strength < 0.1:
+                risk_scale *= 0.5
+
             if other_assets is not None:
                 for series in other_assets:
                     if len(series) > idx and idx >= 2:
@@ -413,8 +461,10 @@ class DynamicHybridStrategy:
 
 # Example usage
 # strategy = DynamicHybridStrategy()
-# signals = strategy.generate_signals(prices, volumes=volumes)
-# print("Decision log", strategy.decision_log[:5])
+# prices = DataService().get_historical_prices(limit=500)
+# signals = strategy.generate_signals(prices)
+# print("First 5 decisions", signals[:5])
+# print("Why trades were skipped", strategy.decision_log[:5])
 
     def optimize_parameters(
         self, prices: List[float], param_grid: Dict[str, List[float]]

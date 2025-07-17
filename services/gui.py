@@ -60,6 +60,7 @@ class TradingApp:
             "strategy",
             "profit",
             "profit_pct",
+            "balance",
             "bought",
             "sold",
             "remaining",
@@ -69,6 +70,7 @@ class TradingApp:
         tree.heading("strategy", text="Strategy")
         tree.heading("profit", text="Profit (TL)")
         tree.heading("profit_pct", text="Profit (%)")
+        tree.heading("balance", text="Balance (TL)")
         tree.heading("bought", text="Bought (BTC)")
         tree.heading("sold", text="Sold (BTC)")
         tree.heading("remaining", text="Remaining (BTC)")
@@ -82,6 +84,7 @@ class TradingApp:
                     result["name"],
                     f"{result['profit']:.2f}",
                     f"{result['profit_pct']:.2f}",
+                    f"{result['final_balance']:.2f}",
                     f"{result['bought']:.4f}",
                     f"{result['sold']:.4f}",
                     f"{result['remaining_btc']:.4f}",

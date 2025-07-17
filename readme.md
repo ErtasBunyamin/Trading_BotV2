@@ -21,6 +21,7 @@ Toplu kar/zarar tablosu:
 
 Her stratejinin toplamda ne kadar kazandırdığı/kaybettirdiği
 Her stratejinin elinde kalan BTC miktarı ve karşılık gelen değeri
+Her stratejinin simülasyon sonundaki toplam bakiyesi
 Güncellenmiş bakiye ile her işlemi listeleyen ayrıntılı işlem günlüğü
 
 Grafikler ve tablo arası kolay geçiş

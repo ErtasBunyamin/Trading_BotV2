@@ -72,6 +72,7 @@ class Simulation:
                     "prices": prices,
                     "trades": trades,
                     "profit": profit,
+                    "final_balance": final_value,
                     "profit_pct": profit_pct,
                     "bought": bought_total,
                     "sold": sold_total,

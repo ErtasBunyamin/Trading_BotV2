@@ -15,6 +15,7 @@ This application aims to regularly fetch the Bitcoin price using the Binance API
 - Collective profit/loss table:
   - Total gains/losses of each strategy
   - Remaining BTC and its value per strategy
+  - Final balance for each strategy
 - Detailed trade log listing each trade with updated balance
 - Easy switching between graphs and table
 - Modern and user-friendly interface

@@ -140,7 +140,8 @@ class TradingApp:
                     ),
                 )
 
-        opt.configure(command=lambda *_: update_table())
+        # update table when filter option changes
+        filter_var.trace_add("write", lambda *_: update_table())
         update_table()
         tree.heading("strategy", text="Strategy")
         tree.heading("profit", text="Profit (TL)")
@@ -258,7 +259,8 @@ class TradingApp:
                         ),
                     )
 
-        opt.configure(command=lambda *_: update_trades())
+        # refresh trade log when filter option changes
+        filter_var.trace_add("write", lambda *_: update_trades())
         update_trades()
 
     def run(self) -> None:

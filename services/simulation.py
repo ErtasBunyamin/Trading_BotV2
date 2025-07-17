@@ -28,7 +28,7 @@ class Simulation:
             balance = 10000.0
             position = 0.0
             position_cost = 0.0
-            trades: List[tuple[int, str, float, float]] = []
+            trades: List[tuple[int, str, float, float, float]] = []
             bought_total = 0.0
             sold_total = 0.0
 
@@ -42,7 +42,7 @@ class Simulation:
                         position += amount
                         balance -= cost
                         position_cost += cost
-                        trades.append((i, "BUY", amount, price))
+                        trades.append((i, "BUY", amount, price, balance))
                         bought_total += amount
                     elif action == "SELL" and position > 0:
                         # Consider selling all if profit would exceed 2% even with low strength
@@ -57,7 +57,7 @@ class Simulation:
                         balance += amount * price
                         position -= amount
                         position_cost -= sell_cost
-                        trades.append((i, "SELL", amount, price))
+                        trades.append((i, "SELL", amount, price, balance))
                         sold_total += amount
                     idx += 1
 

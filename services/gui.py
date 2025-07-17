@@ -28,8 +28,16 @@ class TradingApp:
             fig, ax = plt.subplots(figsize=(6, 4))
             prices = result["prices"]
             ax.plot(prices, label="Price")
-            buys = [(i, amt, price) for i, a, amt, price in result["trades"] if a == "BUY"]
-            sells = [(i, amt, price) for i, a, amt, price in result["trades"] if a == "SELL"]
+            buys = [
+                (i, amt, price)
+                for i, a, amt, price, _ in result["trades"]
+                if a == "BUY"
+            ]
+            sells = [
+                (i, amt, price)
+                for i, a, amt, price, _ in result["trades"]
+                if a == "SELL"
+            ]
             ax.scatter([b[0] for b in buys], [b[2] for b in buys], color="red", label="Buy")
             ax.scatter([s[0] for s in sells], [s[2] for s in sells], color="green", label="Sell")
             for idx, amt, trade_price in buys:
@@ -72,13 +80,16 @@ class TradingApp:
     def _show_trades(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("Trade Log")
-        cols = ("strategy", "candle", "action", "amount", "price")
+        cols = ("strategy", "candle", "action", "amount", "price", "balance")
         tree = ttk.Treeview(win, columns=cols, show="headings")
-        for col, text in zip(cols, ["Strategy", "Candle", "Action", "Amount (BTC)", "Price"]):
+        for col, text in zip(
+            cols,
+            ["Strategy", "Candle", "Action", "Amount (BTC)", "Price", "Balance (TL)"],
+        ):
             tree.heading(col, text=text)
         tree.pack(fill="both", expand=True)
         for result in self.results:
-            for idx, action, amount, price in result["trades"]:
+            for idx, action, amount, price, balance in result["trades"]:
                 tree.insert(
                     "",
                     tk.END,
@@ -88,6 +99,7 @@ class TradingApp:
                         action,
                         f"{amount:.4f}",
                         f"{price:.2f}",
+                        f"{balance:.2f}",
                     ),
                 )
 

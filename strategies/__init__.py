@@ -7,6 +7,7 @@ from .ma_cross import MACrossStrategy
 from .random_strategy import RandomStrategy
 from .custom_strategy import CustomStrategy
 from .dynamic_hybrid import DynamicHybridStrategy
+from .gradient import GradientStrategy
 
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "RandomStrategy",
     "CustomStrategy",
     "DynamicHybridStrategy",
+    "GradientStrategy",
 ]

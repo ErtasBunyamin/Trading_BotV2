@@ -12,6 +12,11 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple
 
+from .rsi import RSIStrategy
+from .macd import MACDStrategy
+from .bollinger import BollingerStrategy
+from .ma_cross import MACrossStrategy
+
 
 class DynamicHybridStrategy:
     """Generate signals with adaptive thresholds based on market regime."""
@@ -49,6 +54,14 @@ class DynamicHybridStrategy:
         self.trend_weight = trend_weight
         self.min_signal_distance = min_signal_distance
         self.confidence_threshold = confidence_threshold
+
+        # Sub-strategies providing raw signals
+        self._strategies = [
+            RSIStrategy(),
+            MACDStrategy(),
+            BollingerStrategy(),
+            MACrossStrategy(),
+        ]
 
     def update_winrates(self, trade_logs: List[Dict]) -> None:
         """Update indicator win rates using the last 20 trades."""
@@ -117,10 +130,35 @@ class DynamicHybridStrategy:
     def generate_signals(
         self,
         prices: List[float],
-        strat_signals: List[Tuple[int, str, float, str]],
-        trade_logs: List[Dict],
+        strat_signals: List[Tuple[int, str, float, str]] | None = None,
+        trade_logs: List[Dict] | None = None,
     ) -> List[Tuple[int, str, float]]:
         """Aggregate indicator signals and return trading decisions."""
+
+        # When no indicator signals are supplied, gather them from the default
+        # sub-strategies so this method is compatible with ``Simulation`` which
+        # only passes ``prices``.
+        if strat_signals is None:
+            strat_signals = []
+            for strat in self._strategies:
+                for idx, action, strength in strat.generate_signals(prices):
+                    strat_signals.append((idx, action, strength, strat.name))
+
+        # Derive simple trade logs when not provided so indicator win rates can
+        # still be updated. The outcome of each signal is evaluated on the next
+        # bar only as a lightweight heuristic.
+        if trade_logs is None:
+            trade_logs = []
+            signals_by_indicator: Dict[str, List[Tuple[int, str]]] = {}
+            for idx, action, _strength, ind in strat_signals:
+                signals_by_indicator.setdefault(ind, []).append((idx, action))
+            for ind, sigs in signals_by_indicator.items():
+                for idx, action in sigs[-20:]:
+                    if idx + 1 < len(prices):
+                        diff = prices[idx + 1] - prices[idx]
+                        pnl = diff if action == "BUY" else -diff
+                        trade_logs.append({"indicator": ind, "pnl": pnl})
+
         self.update_winrates(trade_logs)
 
         # Organize signals per bar as indicator -> (action, strength)
@@ -171,6 +209,4 @@ class DynamicHybridStrategy:
 
 # Example usage
 # strategy = DynamicHybridStrategy()
-# signals = strategy.generate_signals(
-#     prices, [(10, "BUY", 0.8, "RSI"), (10, "BUY", 0.7, "MACD")], trade_logs
-# )
+# signals = strategy.generate_signals(prices)

@@ -28,20 +28,22 @@ class TradingApp:
             fig, ax = plt.subplots(figsize=(6, 4))
             prices = result["prices"]
             ax.plot(prices, label="Price")
-            buys = [(i, amt) for i, a, amt in result["trades"] if a == "BUY"]
-            sells = [(i, amt) for i, a, amt in result["trades"] if a == "SELL"]
-            ax.scatter([b[0] for b in buys], [prices[b[0]] for b in buys], color="red", label="Buy")
-            ax.scatter([s[0] for s in sells], [prices[s[0]] for s in sells], color="green", label="Sell")
-            for idx, amt in buys:
-                ax.annotate(f"{amt:.4f}", (idx, prices[idx]), textcoords="offset points", xytext=(0, 5), ha="center", color="red")
-            for idx, amt in sells:
-                ax.annotate(f"{amt:.4f}", (idx, prices[idx]), textcoords="offset points", xytext=(0, 5), ha="center", color="green")
+            buys = [(i, amt, price) for i, a, amt, price in result["trades"] if a == "BUY"]
+            sells = [(i, amt, price) for i, a, amt, price in result["trades"] if a == "SELL"]
+            ax.scatter([b[0] for b in buys], [b[2] for b in buys], color="red", label="Buy")
+            ax.scatter([s[0] for s in sells], [s[2] for s in sells], color="green", label="Sell")
+            for idx, amt, trade_price in buys:
+                ax.annotate(f"{amt:.4f}", (idx, trade_price), textcoords="offset points", xytext=(0, 5), ha="center", color="red")
+            for idx, amt, trade_price in sells:
+                ax.annotate(f"{amt:.4f}", (idx, trade_price), textcoords="offset points", xytext=(0, 5), ha="center", color="green")
             ax.legend()
             canvas = FigureCanvasTkAgg(fig, master=frame)
             canvas.draw()
             canvas.get_tk_widget().pack(fill="both", expand=True)
         btn = ttk.Button(self.root, text="Show Profit Table", command=self._show_profit)
         btn.pack()
+        btn2 = ttk.Button(self.root, text="Show Trades", command=self._show_trades)
+        btn2.pack()
 
     def _show_profit(self) -> None:
         win = tk.Toplevel(self.root)
@@ -66,6 +68,28 @@ class TradingApp:
                     f"{result['sold']:.4f}",
                 ),
             )
+
+    def _show_trades(self) -> None:
+        win = tk.Toplevel(self.root)
+        win.title("Trade Log")
+        cols = ("strategy", "candle", "action", "amount", "price")
+        tree = ttk.Treeview(win, columns=cols, show="headings")
+        for col, text in zip(cols, ["Strategy", "Candle", "Action", "Amount (BTC)", "Price"]):
+            tree.heading(col, text=text)
+        tree.pack(fill="both", expand=True)
+        for result in self.results:
+            for idx, action, amount, price in result["trades"]:
+                tree.insert(
+                    "",
+                    tk.END,
+                    values=(
+                        result["name"],
+                        idx,
+                        action,
+                        f"{amount:.4f}",
+                        f"{price:.2f}",
+                    ),
+                )
 
     def run(self) -> None:
         self.root.mainloop()

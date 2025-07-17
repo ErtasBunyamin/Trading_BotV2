@@ -30,13 +30,11 @@ class Simulation:
             trades: List[tuple[int, str, float, float]] = []
             bought_total = 0.0
             sold_total = 0.0
-            profit = 0.0
 
             for i, price in enumerate(prices):
                 while idx < len(signals) and signals[idx][0] == i:
                     _, action, strength = signals[idx]
                     strength = max(0.0, min(1.0, strength))
-                    prev_value = balance + position * price
                     if action == "BUY" and balance > 0:
                         cost = balance * strength
                         amount = cost / price
@@ -50,11 +48,10 @@ class Simulation:
                         position -= amount
                         trades.append((i, "SELL", amount, price))
                         sold_total += amount
-                    new_value = balance + position * price
-                    profit += new_value - prev_value
                     idx += 1
 
             final_value = balance + position * prices[-1]
+            profit = final_value - 10000.0
             profit_pct = (profit / 10000.0) * 100
 
             results.append(

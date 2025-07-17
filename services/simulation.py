@@ -18,8 +18,8 @@ class Simulation:
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
-        # Use daily candles for the last month of data
-        prices = self.data_service.get_historical_prices(limit=30, interval="1d")
+        # Fetch 24 hours of data using hourly candles
+        prices = self.data_service.get_historical_prices(limit=24, interval="1h")
         results = []
         for strategy in self.strategies:
             balance = 10000.0

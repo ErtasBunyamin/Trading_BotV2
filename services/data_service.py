@@ -22,11 +22,13 @@ class DataService:
             # Network might be disabled; return placeholder value
             return 0.0
 
-    def get_historical_prices(self, symbol: str = "BTCUSDT", limit: int = 100) -> List[float]:
+    def get_historical_prices(
+        self, symbol: str = "BTCUSDT", limit: int = 100, interval: str = "1h"
+    ) -> List[float]:
         """Return a list of closing prices for the given symbol."""
         url = (
             "https://api.binance.com/api/v3/klines"
-            f"?symbol={symbol}&interval=1h&limit={limit}"
+            f"?symbol={symbol}&interval={interval}&limit={limit}"
         )
         try:
             with urllib.request.urlopen(url) as resp:

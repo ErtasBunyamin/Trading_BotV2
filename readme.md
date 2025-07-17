@@ -1,14 +1,15 @@
 Bitcoin Trading Strategies Simulator
 Proje Amacı
-Bu uygulama, Binance API ile Bitcoin fiyatını düzenli olarak çekerek, popüler ve güvenli 5 farklı borsa stratejisini eş zamanlı olarak sanal ortamda test etmeyi ve karşılaştırmalı analiz yapmayı amaçlar. Her strateji için 10.000 TL’lik başlangıç bakiyesi ile işlem simülasyonu gerçekleştirilir ve sonuçlar detaylı grafikler ve kar/zarar tabloları ile sunulur.
+Bu uygulama, Binance API ile Bitcoin fiyatını düzenli olarak çekerek, popüler ve güvenli 5 farklı borsa stratejisini eş zamanlı olarak sanal ortamda test etmeyi ve karşılaştırmalı analiz yapmayı amaçlar. Her strateji 10.000 TL'lik kendi bakiyesi ile işlem yapar ve sonuçlar detaylı grafikler ile kar/zarar tabloları halinde sunulur.
 
 Özellikler
 Binance API anahtarı ile 5 dakikada bir Bitcoin fiyatı çekme
 
 Kısa sürede en çok kullanılan ve güvenli 5 farklı trade stratejisinin uygulanması
 
-Her stratejiye 10.000 TL sanal bakiye ile long/short işlemlerini simüle etme
+Her strateji için 10.000 TL'lik bağımsız sanal bakiye ile long/short işlemlerini simüle etme
 Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyüklüğü ayarlanır
+- Beklenen kâr %2'yi aşıyorsa sinyal gücü düşük olsa bile tüm pozisyon satılabilir
 
 Her strateji için ayrı grafik:
 
@@ -19,6 +20,9 @@ Alım noktaları (kırmızı), satım noktaları (yeşil)
 Toplu kar/zarar tablosu:
 
 Her stratejinin toplamda ne kadar kazandırdığı/kaybettirdiği
+Her stratejinin elinde kalan BTC miktarı ve karşılık gelen değeri
+Her stratejinin simülasyon sonundaki toplam bakiyesi
+Güncellenmiş bakiye ile her işlemi listeleyen ayrıntılı işlem günlüğü
 
 Grafikler ve tablo arası kolay geçiş
 

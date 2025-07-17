@@ -11,6 +11,7 @@ This application aims to regularly fetch the Bitcoin price using the Binance API
 - Optional "full balance" mode executes each trade with the entire balance for easier comparison
 - Commission and slippage costs can be simulated for each trade
 - Adaptive position scaling reacts to winning streaks and market trend
+- Dynamic take-profit and trailing-stop levels adjust with volatility and signal strength
 - Sells may override the signal strength and liquidate the entire position when the expected profit exceeds 2%
 - Separate graph for each strategy:
   - Price curve

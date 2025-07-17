@@ -59,6 +59,10 @@ class DynamicHybridStrategy:
         log_decisions: bool = True,
         auto_tune_window: int = 50,
         auto_tune_step: float = 0.05,
+        strong_trend_streak: int = 3,
+        trend_scale_boost: float = 0.5,
+        weak_trend_penalty: float = 0.5,
+        weak_signal_limit: float = 0.05,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -100,6 +104,10 @@ class DynamicHybridStrategy:
         self.log_decisions = log_decisions
         self.auto_tune_window = auto_tune_window
         self.auto_tune_step = auto_tune_step
+        self.strong_trend_streak = strong_trend_streak
+        self.trend_scale_boost = trend_scale_boost
+        self.weak_trend_penalty = weak_trend_penalty
+        self.weak_signal_limit = weak_signal_limit
 
         self._base_threshold_default = base_threshold
         self._min_distance_default = min_signal_distance
@@ -216,8 +224,8 @@ class DynamicHybridStrategy:
                 return factor
         return 1.0
 
-    def _update_performance(self, trade_logs: List[Dict]) -> None:
-        """Adjust win/loss streaks and trade scale based on last trade."""
+    def _update_performance(self, trade_logs: List[Dict], prices: List[float] | None = None) -> None:
+        """Adjust win/loss streaks and trade scale based on last trade and trend."""
         if not trade_logs:
             return
         last_pnl = trade_logs[-1].get("pnl", 0)
@@ -231,6 +239,22 @@ class DynamicHybridStrategy:
             if self.market_regime == "trend":
                 self.scale_factor = min(
                     self.scale_max, self.scale_factor + self.scale_step
+                )
+
+        if prices and len(prices) >= self.lookback:
+            window = prices[-self.lookback :]
+            t_strength = abs(self._trend_score(window))
+            if (
+                last_pnl > 0
+                and t_strength > 0.4
+                and self.profit_streak >= self.strong_trend_streak
+            ):
+                self.scale_factor = min(
+                    self.scale_max, self.scale_factor + self.trend_scale_boost
+                )
+            elif t_strength < 0.1:
+                self.scale_factor = max(
+                    1.0, self.scale_factor * self.weak_trend_penalty
                 )
 
     def _auto_tune(self, trade_logs: List[Dict]) -> None:
@@ -301,7 +325,7 @@ class DynamicHybridStrategy:
                         trade_logs.append({"indicator": ind, "pnl": pnl})
 
         self.update_winrates(trade_logs)
-        self._update_performance(trade_logs)
+        self._update_performance(trade_logs, prices)
         self._auto_tune(trade_logs)
 
         if self.trailing_stop_pct is None or self.profit_threshold is None:
@@ -353,13 +377,7 @@ class DynamicHybridStrategy:
                     self.decision_log.append((idx, reason))
                 continue
 
-            # Update stop levels dynamically with current ATR
-            if prices[idx] > 0:
-                self.trailing_stop_pct = (atr * self.atr_stop_mult) / prices[idx]
-                base_profit = atr * self.atr_profit_mult
-            else:
-                base_profit = atr * self.atr_profit_mult
-
+            # Evaluate market regime and indicator score
             self.detect_market_regime(prices[: idx + 1])
             score = self.dynamic_voting(indicator_map)
 
@@ -391,11 +409,20 @@ class DynamicHybridStrategy:
                 elif prices[idx] < ema:
                     score -= self.momentum_weight
 
-            # Adjust take-profit width based on signal strength
+            # Volatility based take-profit and trailing stop
             if prices[idx] > 0:
-                self.profit_threshold = (
-                    base_profit * (1 + min(1.0, abs(score))) / prices[idx]
+                ema_window = (
+                    pd.Series(window)
+                    .ewm(span=min(len(window), self.lookback))
+                    .mean()
+                    .iloc[-1]
                 )
+                spread = abs(prices[idx] - ema_window) / prices[idx]
+                dyn = 1 + min(1.0, abs(score))
+                profit_base = atr * self.atr_profit_mult * (1 + spread)
+                stop_base = atr * self.atr_stop_mult * (1 + spread)
+                self.profit_threshold = profit_base * dyn / prices[idx]
+                self.trailing_stop_pct = stop_base * dyn / prices[idx]
 
             threshold = self.get_threshold()
             dynamic_conf = self.confidence_threshold
@@ -408,9 +435,10 @@ class DynamicHybridStrategy:
                 dynamic_dist = int(self.min_signal_distance + delta * 2)
             threshold *= self._session_factor(idx)
 
-            if abs(score) < dynamic_conf:
+            if abs(score) < dynamic_conf or abs(score) < self.weak_signal_limit:
                 if self.log_decisions:
-                    self.decision_log.append((idx, "confidence"))
+                    reason = "confidence" if abs(score) < dynamic_conf else "weak"
+                    self.decision_log.append((idx, reason))
                 continue
             if idx - last_idx < dynamic_dist:
                 if self.log_decisions:
@@ -447,10 +475,24 @@ class DynamicHybridStrategy:
             if score >= threshold:
                 strength = min(1.0, abs(score) * risk_scale)
                 final_signals.append((idx, "BUY", strength))
+                if self.log_decisions:
+                    self.decision_log.append(
+                        (
+                            idx,
+                            f"BUY s={score:.2f} r={risk_scale:.2f} tp={self.profit_threshold:.3f} sl={self.trailing_stop_pct:.3f}",
+                        )
+                    )
                 last_idx = idx
             elif score <= -threshold:
                 strength = min(1.0, abs(score) * risk_scale)
                 final_signals.append((idx, "SELL", strength))
+                if self.log_decisions:
+                    self.decision_log.append(
+                        (
+                            idx,
+                            f"SELL s={score:.2f} r={risk_scale:.2f} tp={self.profit_threshold:.3f} sl={self.trailing_stop_pct:.3f}",
+                        )
+                    )
                 last_idx = idx
             else:
                 if self.log_decisions:

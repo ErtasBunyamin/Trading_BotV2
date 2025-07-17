@@ -13,6 +13,7 @@ Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyükl�
 - Beklenen kâr %2'yi aşıyorsa sinyal gücü düşük olsa bile tüm pozisyon satılabilir
 - Her işlemde komisyon ve slipaj maliyeti simüle edilebilir
 - Kazanan işlemler arttıkça pozisyon büyüklüğü otomatik olarak artar
+- Volatilite ve sinyal gücüne göre dinamik kar al ve trailing-stop seviyeleri
 
 Her strateji için ayrı grafik:
 

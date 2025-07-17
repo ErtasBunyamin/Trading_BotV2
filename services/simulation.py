@@ -74,7 +74,12 @@ class Simulation:
                     strategy_trailing_stop = getattr(
                         strategy, "trailing_stop_pct", self.trailing_stop_pct
                     )
-                    if price <= highest_price * (1 - strategy_trailing_stop):
+                    # Skip trailing stop check when ``strategy_trailing_stop`` is
+                    # ``None`` as some strategies may disable it by default.
+                    if (
+                        strategy_trailing_stop is not None
+                        and price <= highest_price * (1 - strategy_trailing_stop)
+                    ):
                         balance += position * price
                         trades.append((i, "SELL", position, price, balance))
                         performance_logs.append(

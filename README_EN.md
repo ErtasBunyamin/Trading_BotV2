@@ -51,7 +51,7 @@ Initially, the following example strategies will be used:
 - Bollinger Bands
 - MA Cross (Moving Average Cross)
 - Custom (User defined or added later)
-- Dynamic Hybrid (adaptive thresholding with win-rate weighting and regime detection)
+- Dynamic Hybrid (ATR/volume filtering, adaptive risk and regime-aware thresholds)
 Each strategy triggers trades according to its own rules and visualizes the results.
 
 ## Development Plan

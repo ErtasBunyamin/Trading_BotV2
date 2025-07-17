@@ -37,6 +37,9 @@ class Simulation:
 
         results = []
         for strategy in self.strategies:
+            # Allow strategies to prepare using the full price history
+            if hasattr(strategy, "before_run"):
+                strategy.before_run(prices)
             strategy_trailing_stop = (
                 getattr(strategy, "trailing_stop_pct", None)
                 if getattr(strategy, "trailing_stop_pct", None) is not None

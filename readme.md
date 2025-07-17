@@ -75,7 +75,7 @@ MA Cross (Moving Average Cross)
 
 Custom (Kullanıcıya özgü veya sonradan eklenebilir strateji)
 
-Dynamic Hybrid (Kazanma oranı ağırlıklı ve piyasa rejimine duyarlı)
+Dynamic Hybrid (ATR/hacim filtresi ve uyarlanabilir risk yönetimi)
 
 Her stratejinin kendi kuralları ile işlemleri tetiklenir ve sonuçlar görselleştirilir.
 

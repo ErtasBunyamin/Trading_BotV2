@@ -36,6 +36,20 @@ class DynamicHybridStrategy:
         trend_weight: float = 0.2,
         min_signal_distance: int = 1,
         confidence_threshold: float = 0.0,
+        atr_period: int = 14,
+        atr_multiplier: float = 1.0,
+        volume_period: int = 20,
+        volume_multiplier: float = 1.0,
+        risk_atr_scale: float = 1.0,
+        drawdown_lookback: int = 3,
+        drawdown_penalty: float = 0.5,
+        winrate_window: int = 20,
+        winrate_target: float = 0.55,
+        ema_momentum_period: int = 20,
+        momentum_weight: float = 0.1,
+        session_thresholds: Dict[Tuple[int, int], float] | None = None,
+        atr_stop_mult: float = 1.5,
+        atr_profit_mult: float = 2.0,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -55,6 +69,26 @@ class DynamicHybridStrategy:
         self.min_signal_distance = min_signal_distance
         self.confidence_threshold = confidence_threshold
 
+        # --- Advanced parameters ---
+        self.atr_period = atr_period
+        self.atr_multiplier = atr_multiplier
+        self.volume_period = volume_period
+        self.volume_multiplier = volume_multiplier
+        self.risk_atr_scale = risk_atr_scale
+        self.drawdown_lookback = drawdown_lookback
+        self.drawdown_penalty = drawdown_penalty
+        self.winrate_window = winrate_window
+        self.winrate_target = winrate_target
+        self.ema_momentum_period = ema_momentum_period
+        self.momentum_weight = momentum_weight
+        self.session_thresholds = session_thresholds or {}
+        self.atr_stop_mult = atr_stop_mult
+        self.atr_profit_mult = atr_profit_mult
+
+        # Runtime state
+        self.loss_streak = 0
+        self._atr_values: List[float] = []
+
         # Sub-strategies providing raw signals
         self._strategies = [
             RSIStrategy(),
@@ -62,6 +96,14 @@ class DynamicHybridStrategy:
             BollingerStrategy(),
             MACrossStrategy(),
         ]
+
+    def before_run(self, prices: List[float]) -> None:
+        """Initialize ATR based stop levels before simulation starts."""
+        base_atr = self._average_true_range(prices[-self.atr_period :])
+        if base_atr and prices:
+            last_price = prices[-1]
+            self.trailing_stop_pct = (base_atr * self.atr_stop_mult) / last_price
+            self.profit_threshold = (base_atr * self.atr_profit_mult) / last_price
 
     def update_winrates(self, trade_logs: List[Dict]) -> None:
         """Update indicator win rates using the last 20 trades."""
@@ -133,11 +175,40 @@ class DynamicHybridStrategy:
         trend = slope * n / window[-1]
         return max(-1.0, min(1.0, trend))
 
+    def _average_true_range(self, closes: List[float]) -> float:
+        """Approximate ATR using close-to-close changes."""
+        if len(closes) < 2:
+            return 0.0
+        diffs = [abs(closes[i] - closes[i - 1]) for i in range(1, len(closes))]
+        return float(np.mean(diffs[-self.atr_period :]))
+
+    def _session_factor(self, idx: int) -> float:
+        """Return threshold multiplier depending on time of day."""
+        if not self.session_thresholds:
+            return 1.0
+        # 5 minute candles -> 12 per hour
+        hour = (idx // 12) % 24
+        for (start, end), factor in self.session_thresholds.items():
+            if start <= hour < end:
+                return factor
+        return 1.0
+
+    def _update_drawdown(self, trade_logs: List[Dict]) -> None:
+        """Update consecutive loss streak for risk adjustment."""
+        if not trade_logs:
+            return
+        last_pnl = trade_logs[-1].get("pnl", 0)
+        if last_pnl <= 0:
+            self.loss_streak += 1
+        else:
+            self.loss_streak = 0
+
     def generate_signals(
         self,
         prices: List[float],
         strat_signals: List[Tuple[int, str, float, str]] | None = None,
         trade_logs: List[Dict] | None = None,
+        volumes: List[float] | None = None,
     ) -> List[Tuple[int, str, float]]:
         """Aggregate indicator signals and return trading decisions."""
 
@@ -166,6 +237,14 @@ class DynamicHybridStrategy:
                         trade_logs.append({"indicator": ind, "pnl": pnl})
 
         self.update_winrates(trade_logs)
+        self._update_drawdown(trade_logs)
+
+        if self.trailing_stop_pct is None or self.profit_threshold is None:
+            base_atr = self._average_true_range(prices[-self.atr_period :])
+            if base_atr and prices:
+                last_price = prices[-1]
+                self.trailing_stop_pct = (base_atr * self.atr_stop_mult) / last_price
+                self.profit_threshold = (base_atr * self.atr_profit_mult) / last_price
 
         # Organize signals per bar as indicator -> (action, strength)
         signals_by_idx: Dict[int, Dict[str, Tuple[str, float]]] = {}
@@ -175,9 +254,33 @@ class DynamicHybridStrategy:
         final_signals: List[Tuple[int, str, float]] = []
         last_idx = -self.min_signal_distance
 
+        overall_trades = trade_logs[-self.winrate_window :]
+        overall_win = (
+            sum(1 for t in overall_trades if t["pnl"] > 0) / len(overall_trades)
+            if overall_trades
+            else 1.0
+        )
+
         for idx in range(len(prices)):
             indicator_map = signals_by_idx.get(idx)
             if not indicator_map:
+                continue
+
+            # ATR and volume based filters
+            atr = self._average_true_range(prices[max(0, idx - self.atr_period) : idx + 1])
+            self._atr_values.append(atr)
+            atr_allowed = True
+            if len(self._atr_values) >= self.atr_period:
+                atr_avg = float(np.mean(self._atr_values[-self.atr_period :]))
+                atr_allowed = atr >= atr_avg * self.atr_multiplier
+            else:
+                atr_avg = atr
+
+            volume_allowed = True
+            if volumes is not None and idx >= self.volume_period:
+                vol_avg = float(np.mean(volumes[idx - self.volume_period + 1 : idx + 1]))
+                volume_allowed = volumes[idx] >= vol_avg * self.volume_multiplier
+            if not atr_allowed or not volume_allowed:
                 continue
 
             self.detect_market_regime(prices[: idx + 1])
@@ -196,18 +299,47 @@ class DynamicHybridStrategy:
             if self.trend_weight:
                 score += self._trend_score(window) * self.trend_weight
 
+            # Momentum & EMA filter
+            if self.momentum_weight and idx >= self.ema_momentum_period:
+                ema = (
+                    pd.Series(prices[: idx + 1])
+                    .ewm(span=self.ema_momentum_period)
+                    .mean()
+                    .iloc[-1]
+                )
+                high_mom = max(window[-self.ema_momentum_period :])
+                near_high = high_mom != low and prices[idx] >= high_mom * 0.97
+                if prices[idx] >= ema and near_high:
+                    score += self.momentum_weight
+                elif prices[idx] < ema:
+                    score -= self.momentum_weight
+
             threshold = self.get_threshold()
+            # adapt threshold based on recent win rate and session
+            if overall_trades and overall_win < self.winrate_target:
+                threshold *= 1 + (self.winrate_target - overall_win)
+            threshold *= self._session_factor(idx)
 
             if abs(score) < self.confidence_threshold:
                 continue
             if idx - last_idx < self.min_signal_distance:
                 continue
 
+            # Risk based strength scaling
+            risk_scale = 1.0
+            if atr_avg > 0:
+                volatility_factor = atr / atr_avg
+                risk_scale /= max(1.0, volatility_factor ** self.risk_atr_scale)
+            if self.loss_streak > self.drawdown_lookback:
+                risk_scale *= self.drawdown_penalty ** (self.loss_streak - self.drawdown_lookback)
+
             if score >= threshold:
-                final_signals.append((idx, "BUY", min(1.0, abs(score))))
+                strength = min(1.0, abs(score) * risk_scale)
+                final_signals.append((idx, "BUY", strength))
                 last_idx = idx
             elif score <= -threshold:
-                final_signals.append((idx, "SELL", min(1.0, abs(score))))
+                strength = min(1.0, abs(score) * risk_scale)
+                final_signals.append((idx, "SELL", strength))
                 last_idx = idx
 
         return final_signals
@@ -215,4 +347,4 @@ class DynamicHybridStrategy:
 
 # Example usage
 # strategy = DynamicHybridStrategy()
-# signals = strategy.generate_signals(prices)
+# signals = strategy.generate_signals(prices, volumes=volumes)

@@ -22,6 +22,7 @@ class Simulation:
         full_balance: bool = False,
         commission_pct: float = 0.001,
         slippage_pct: float = 0.0005,
+        min_trade_size: float = 0.0,
     ) -> None:
         self.data_service = data_service
         self.logger = logger
@@ -32,6 +33,7 @@ class Simulation:
         self.full_balance = full_balance
         self.commission_pct = commission_pct
         self.slippage_pct = slippage_pct
+        self.min_trade_size = min_trade_size
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
@@ -52,7 +54,6 @@ class Simulation:
             strategy_profit_threshold = getattr(
                 strategy, "profit_threshold", self.profit_threshold
             )
-            opps = getattr(strategy, "missed_opportunities", [])
             strategy_commission_pct = getattr(
                 strategy, "commission_pct", self.commission_pct
             )
@@ -121,6 +122,9 @@ class Simulation:
                             commission = cost * strategy_commission_pct
                         total_cost = cost + commission
                         amount = cost / trade_price
+                        if amount < self.min_trade_size:
+                            idx += 1
+                            continue
                         position += amount
                         balance -= total_cost
                         position_cost += total_cost
@@ -161,6 +165,9 @@ class Simulation:
                             amount = position * strength
                         if amount > position:
                             amount = position
+                        if amount < self.min_trade_size:
+                            idx += 1
+                            continue
                         trade_price = price * (1 - strategy_slippage_pct)
                         revenue = amount * trade_price
                         commission = revenue * strategy_commission_pct
@@ -192,6 +199,32 @@ class Simulation:
                             highest_price = 0.0
                     idx += 1
 
+            if position > 0:
+                trade_price = prices[-1] * (1 - strategy_slippage_pct)
+                revenue = position * trade_price
+                commission = revenue * strategy_commission_pct
+                pnl = revenue - commission - position_cost
+                balance += position_cost + pnl
+                trades.append((len(prices) - 1, "SELL", position, trade_price, balance))
+                performance_logs.append(
+                    {
+                        "idx": len(prices) - 1,
+                        "action": "SELL",
+                        "amount": position,
+                        "price": trade_price,
+                        "commission": commission,
+                        "slippage": prices[-1] - trade_price,
+                        "reason": "final_close",
+                        "pnl": pnl,
+                        "position_after": 0.0,
+                        "balance_after": balance,
+                    }
+                )
+                sold_total += position
+                position = 0.0
+                position_cost = 0.0
+                highest_price = 0.0
+
             holding_value = position * prices[-1]
             final_value = balance + holding_value
             profit = final_value - 10000.0
@@ -203,6 +236,13 @@ class Simulation:
             strategy_profit_threshold = getattr(
                 strategy, "profit_threshold", self.profit_threshold
             )
+            if hasattr(strategy, "missed_summary"):
+                miss_buy, miss_sell, miss_profit = strategy.missed_summary()
+                miss_logs = getattr(strategy, "missed_opportunities", [])
+            else:
+                miss_buy = miss_sell = 0
+                miss_profit = 0.0
+                miss_logs = []
 
             results.append(
                 {
@@ -217,11 +257,14 @@ class Simulation:
                     "sold": sold_total,
                     "remaining_btc": position,
                 "holding_value": holding_value,
-                "trailing_stops": trailing_closed,
-                "profit_threshold": strategy_profit_threshold,
-                "trailing_stop_pct": strategy_trailing_stop,
-                "opportunities": opps,
-            }
+                    "trailing_stops": trailing_closed,
+                    "profit_threshold": strategy_profit_threshold,
+                    "trailing_stop_pct": strategy_trailing_stop,
+                    "opportunities": miss_logs,
+                    "missed_buy": miss_buy,
+                    "missed_sell": miss_sell,
+                    "missed_profit": miss_profit,
+                }
             )
             self.logger.log(f"{strategy.name} profit: {profit:.2f}")
 

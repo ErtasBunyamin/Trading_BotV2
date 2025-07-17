@@ -85,6 +85,7 @@ Custom (Kullanıcıya özgü veya sonradan eklenebilir strateji)
 Dynamic Hybrid (ATR & hacim filtresi, uyarlanabilir risk yönetimi, seans
 eşikleri, piyasa rejimi algısı, çoklu zaman dilimi trend filtreleri, komisyon/slipaj simülasyonu ve parametre optimizasyonu)
 kaçan fırsatları tespit ederek eşiği dinamik düşürür
+Grafikte kaçan fırsatlar özel işaretlerle gösterilir ve potansiyel kar raporlanır
 
 Her stratejinin kendi kuralları ile işlemleri tetiklenir ve sonuçlar görselleştirilir.
 

@@ -38,6 +38,7 @@ def main() -> None:
         full_balance=False,
         commission_pct=0.001,
         slippage_pct=0.0005,
+        min_trade_size=0.0001,
     )
 
     logger.log("Application started")

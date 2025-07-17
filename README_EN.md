@@ -13,6 +13,7 @@ This application aims to regularly fetch the Bitcoin price using the Binance API
 - Adaptive position scaling reacts to winning streaks and market trend
 - Dynamic take-profit and trailing-stop levels adjust with volatility and signal strength
 - Adaptive opportunity trigger lowers the threshold after missed moves
+- Missed opportunities are marked on charts and summarized with potential profit
 - EMA cross and volume breakout detection trigger initial trades with a small
   position which can pyramid as the trend confirms
 - Sells may override the signal strength and liquidate the entire position when the expected profit exceeds 2%

@@ -47,22 +47,16 @@ class TradingApp:
             ax.scatter([b[0] for b in buys], [b[2] for b in buys], color="red", label="Buy")
             ax.scatter([s[0] for s in sells], [s[2] for s in sells], color="green", label="Sell")
             if opps:
-                ax.scatter(
-                    [o[0] for o in opps],
-                    [o[1] for o in opps],
-                    color="purple",
-                    marker="x",
-                    label="Missed",
-                )
-                for idx, price in opps:
-                    ax.annotate(
-                        "X",
-                        (idx, price),
-                        textcoords="offset points",
-                        xytext=(0, -10),
-                        ha="center",
-                        color="purple",
-                    )
+                buys_m = [o for o in opps if o[2] == "BUY"]
+                sells_m = [o for o in opps if o[2] == "SELL"]
+                if buys_m:
+                    ax.scatter([o[0] for o in buys_m], [o[1] for o in buys_m], color="purple", marker="x", label="Missed Buy")
+                    for i, p, *_ in buys_m:
+                        ax.annotate("M", (i, p), textcoords="offset points", xytext=(0, -10), ha="center", color="purple")
+                if sells_m:
+                    ax.scatter([o[0] for o in sells_m], [o[1] for o in sells_m], color="orange", marker="x", label="Missed Sell")
+                    for i, p, *_ in sells_m:
+                        ax.annotate("M", (i, p), textcoords="offset points", xytext=(0, -10), ha="center", color="orange")
             for idx, amt, trade_price in buys:
                 ax.annotate(f"{amt:.4f}", (idx, trade_price), textcoords="offset points", xytext=(0, 5), ha="center", color="red")
             for idx, amt, trade_price in sells:
@@ -90,6 +84,9 @@ class TradingApp:
             "value",
             "profit_threshold",
             "trailing_stop",
+            "missed_buy",
+            "missed_sell",
+            "missed_profit",
         )
         tree = ttk.Treeview(win, columns=cols, show="headings")
         tree.heading("strategy", text="Strategy")
@@ -102,6 +99,9 @@ class TradingApp:
         tree.heading("value", text="Value (TL)")
         tree.heading("profit_threshold", text="Profit Th")
         tree.heading("trailing_stop", text="Trailing %")
+        tree.heading("missed_buy", text="Missed Buy")
+        tree.heading("missed_sell", text="Missed Sell")
+        tree.heading("missed_profit", text="Missed Pot")
         tree.pack(fill="both", expand=True)
 
         for result in self.results:
@@ -119,32 +119,65 @@ class TradingApp:
                     fmt(result.get("holding_value")),
                     fmt(result.get("profit_threshold")),
                     fmt(result.get("trailing_stop_pct")),
+                    result.get("missed_buy", 0),
+                    result.get("missed_sell", 0),
+                    fmt(result.get("missed_profit")),
                 ),
             )
 
     def _show_trades(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("Trade Log")
-        cols = ("strategy", "candle", "action", "amount", "price", "balance")
-        tree = ttk.Treeview(win, columns=cols, show="headings")
+        cols = (
+            "strategy",
+            "candle",
+            "action",
+            "amount",
+            "price",
+            "balance",
+            "reason",
+            "pnl",
+        )
+        frame = ttk.Frame(win)
+        frame.pack(fill="both", expand=True)
+        tree = ttk.Treeview(frame, columns=cols, show="headings")
+        scroll_y = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
+        scroll_x = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+        scroll_y.pack(side="right", fill="y")
+        scroll_x.pack(side="bottom", fill="x")
+        tree.pack(fill="both", expand=True)
         for col, text in zip(
             cols,
-            ["Strategy", "Candle", "Action", "Amount (BTC)", "Price", "Balance (TL)"],
+            [
+                "Strategy",
+                "Candle",
+                "Action",
+                "Amount (BTC)",
+                "Price",
+                "Balance (TL)",
+                "Reason",
+                "PnL",
+            ],
         ):
             tree.heading(col, text=text)
-        tree.pack(fill="both", expand=True)
+
         for result in self.results:
-            for idx, action, amount, price, balance in result["trades"]:
+            # Detailed logs contain extra fields
+            details = result.get("details", [])
+            for log in details:
                 tree.insert(
                     "",
                     tk.END,
                     values=(
                         result["name"],
-                        idx,
-                        action,
-                        fmt(amount, ".4f"),
-                        fmt(price),
-                        fmt(balance),
+                        log.get("idx"),
+                        log.get("action"),
+                        fmt(log.get("amount"), ".4f"),
+                        fmt(log.get("price")),
+                        fmt(log.get("balance_after")),
+                        log.get("reason", ""),
+                        fmt(log.get("pnl")),
                     ),
                 )
 

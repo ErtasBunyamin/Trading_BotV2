@@ -83,6 +83,8 @@ MA Cross (Moving Average Cross)
 
 Custom (Kullanıcıya özgü veya sonradan eklenebilir strateji)
 
+Gradient (Normalize eğim ve volatilite ayarlı eşik)
+
 Dynamic Hybrid (ATR & hacim filtresi, uyarlanabilir risk yönetimi, seans
 eşikleri, piyasa rejimi algısı, çoklu zaman dilimi trend filtreleri, komisyon/slipaj simülasyonu ve parametre optimizasyonu)
 kaçan fırsatları tespit ederek otomatik alım/satım yapar, eşiği dinamik düşürür

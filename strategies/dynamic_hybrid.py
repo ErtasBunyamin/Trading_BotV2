@@ -63,6 +63,14 @@ class DynamicHybridStrategy:
         trend_scale_boost: float = 0.5,
         weak_trend_penalty: float = 0.5,
         weak_signal_limit: float = 0.05,
+        ema_short: int = 10,
+        ema_long: int = 30,
+        volume_breakout_period: int = 30,
+        volume_breakout_mult: float = 1.5,
+        pyramid_levels: int = 4,
+        pyramid_step_pct: float = 0.01,
+        base_position_size: float = 0.25,
+        weak_exit_count: int = 2,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -108,6 +116,14 @@ class DynamicHybridStrategy:
         self.trend_scale_boost = trend_scale_boost
         self.weak_trend_penalty = weak_trend_penalty
         self.weak_signal_limit = weak_signal_limit
+        self.ema_short = ema_short
+        self.ema_long = ema_long
+        self.volume_breakout_period = volume_breakout_period
+        self.volume_breakout_mult = volume_breakout_mult
+        self.pyramid_levels = pyramid_levels
+        self.pyramid_step_pct = pyramid_step_pct
+        self.base_position_size = base_position_size
+        self.weak_exit_count = weak_exit_count
 
         self._base_threshold_default = base_threshold
         self._min_distance_default = min_signal_distance
@@ -119,6 +135,12 @@ class DynamicHybridStrategy:
         self.scale_factor = 1.0
         self._atr_values: List[float] = []
         self.decision_log: List[Tuple[int, str]] = []
+        self.position = 0.0
+        self.entry_price = 0.0
+        self.highest_price = 0.0
+        self.last_buy_price = 0.0
+        self.pyramid_count = 0
+        self.weak_streak = 0
 
         # Sub-strategies providing raw signals
         self._strategies = [
@@ -353,6 +375,9 @@ class DynamicHybridStrategy:
         for idx in range(len(prices)):
             indicator_map = signals_by_idx.get(idx)
             if not indicator_map:
+                # Still update trailing stop when in a position
+                if self.position > 0 and prices[idx] > self.highest_price:
+                    self.highest_price = prices[idx]
                 continue
 
             # ATR and volume based filters
@@ -435,10 +460,11 @@ class DynamicHybridStrategy:
                 dynamic_dist = int(self.min_signal_distance + delta * 2)
             threshold *= self._session_factor(idx)
 
-            if abs(score) < dynamic_conf or abs(score) < self.weak_signal_limit:
+            if abs(score) < dynamic_conf:
                 if self.log_decisions:
-                    reason = "confidence" if abs(score) < dynamic_conf else "weak"
-                    self.decision_log.append((idx, reason))
+                    self.decision_log.append((idx, "confidence"))
+                if self.position > 0:
+                    self.weak_streak += 1
                 continue
             if idx - last_idx < dynamic_dist:
                 if self.log_decisions:
@@ -472,31 +498,98 @@ class DynamicHybridStrategy:
                             risk_scale *= self.correlation_penalty
                             break
 
-            if score >= threshold:
-                strength = min(1.0, abs(score) * risk_scale)
+            # --- Trend start detection (EMA cross or volume breakout) ---
+            cross_up = False
+            if idx >= self.ema_long:
+                seg = prices[idx - self.ema_long : idx + 1]
+                s_ema = pd.Series(seg).ewm(span=self.ema_short).mean()
+                l_ema = pd.Series(seg).ewm(span=self.ema_long).mean()
+                cross_up = s_ema.iloc[-1] > l_ema.iloc[-1] and s_ema.iloc[-2] <= l_ema.iloc[-2]
+
+            vol_break = False
+            if volumes is not None and idx >= self.volume_breakout_period:
+                avg_vol = float(np.mean(volumes[idx - self.volume_breakout_period + 1 : idx + 1]))
+                vol_break = volumes[idx] >= avg_vol * self.volume_breakout_mult
+
+            # update trailing stop reference
+            if self.position > 0 and prices[idx] > self.highest_price:
+                self.highest_price = prices[idx]
+
+            opened = False
+            # Entry or pyramiding logic
+            if self.position == 0 and (cross_up or vol_break) and score >= threshold:
+                strength = min(1.0, self.base_position_size * risk_scale)
                 final_signals.append((idx, "BUY", strength))
+                self.position += strength
+                self.entry_price = prices[idx]
+                self.last_buy_price = prices[idx]
+                self.highest_price = prices[idx]
+                self.pyramid_count = 1
+                self.trailing_stop_pct = (atr * 1.2) / prices[idx]
                 if self.log_decisions:
-                    self.decision_log.append(
-                        (
-                            idx,
-                            f"BUY s={score:.2f} r={risk_scale:.2f} tp={self.profit_threshold:.3f} sl={self.trailing_stop_pct:.3f}",
-                        )
-                    )
+                    self.decision_log.append((idx, f"BUY entry {strength:.2f}"))
                 last_idx = idx
-            elif score <= -threshold:
-                strength = min(1.0, abs(score) * risk_scale)
-                final_signals.append((idx, "SELL", strength))
+                opened = True
+            elif (
+                self.position > 0
+                and self.pyramid_count < self.pyramid_levels
+                and score >= threshold * 1.2
+                and prices[idx] >= self.last_buy_price * (1 + self.pyramid_step_pct)
+            ):
+                strength = min(1.0, self.base_position_size * risk_scale)
+                final_signals.append((idx, "BUY", strength))
+                self.position += strength
+                self.last_buy_price = prices[idx]
+                self.pyramid_count += 1
                 if self.log_decisions:
-                    self.decision_log.append(
-                        (
-                            idx,
-                            f"SELL s={score:.2f} r={risk_scale:.2f} tp={self.profit_threshold:.3f} sl={self.trailing_stop_pct:.3f}",
-                        )
-                    )
+                    self.decision_log.append((idx, f"Pyramid {self.pyramid_count} {strength:.2f}"))
                 last_idx = idx
-            else:
+                opened = True
+
+            # Stop-loss and trailing stop
+            stop_price = self.highest_price - atr * 1.2
+            if self.position > 0 and prices[idx] <= stop_price:
+                final_signals.append((idx, "SELL", self.position))
                 if self.log_decisions:
-                    self.decision_log.append((idx, "Score düşük"))
+                    self.decision_log.append((idx, "stop"))
+                self.position = 0
+                self.pyramid_count = 0
+                self.weak_streak = 0
+                last_idx = idx
+                continue
+
+            # Exit on strong opposite signal or persistent weakness
+            if score <= -threshold and self.position > 0:
+                final_signals.append((idx, "SELL", self.position))
+                if self.log_decisions:
+                    self.decision_log.append((idx, f"SELL score {score:.2f}"))
+                self.position = 0
+                self.pyramid_count = 0
+                self.weak_streak = 0
+                last_idx = idx
+                continue
+
+            if opened:
+                self.weak_streak = 0
+                continue
+
+            if self.position > 0:
+                if abs(score) < self.weak_signal_limit:
+                    self.weak_streak += 1
+                else:
+                    self.weak_streak = 0
+                if self.weak_streak >= self.weak_exit_count:
+                    final_signals.append((idx, "SELL", self.position))
+                    if self.log_decisions:
+                        self.decision_log.append((idx, "weak exit"))
+                    self.position = 0
+                    self.pyramid_count = 0
+                    self.weak_streak = 0
+                    last_idx = idx
+                    continue
+
+            if self.log_decisions and self.position == 0:
+                self.decision_log.append((idx, "Score düşük"))
 
         return final_signals
 

@@ -14,6 +14,8 @@ Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyükl�
 - Her işlemde komisyon ve slipaj maliyeti simüle edilebilir
 - Kazanan işlemler arttıkça pozisyon büyüklüğü otomatik olarak artar
 - Volatilite ve sinyal gücüne göre dinamik kar al ve trailing-stop seviyeleri
+- EMA kesişimi ve hacim kırılımı ilk küçük pozisyonu tetikler, trend
+  onaylandıkça kademeli alım yapılır
 
 Her strateji için ayrı grafik:
 

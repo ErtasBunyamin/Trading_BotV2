@@ -65,6 +65,8 @@ class TradingApp:
             "sold",
             "remaining",
             "value",
+            "profit_threshold",
+            "trailing_stop",
         )
         tree = ttk.Treeview(win, columns=cols, show="headings")
         tree.heading("strategy", text="Strategy")
@@ -75,6 +77,8 @@ class TradingApp:
         tree.heading("sold", text="Sold (BTC)")
         tree.heading("remaining", text="Remaining (BTC)")
         tree.heading("value", text="Value (TL)")
+        tree.heading("profit_threshold", text="Profit Th")
+        tree.heading("trailing_stop", text="Trailing %")
         tree.pack(fill="both", expand=True)
         for result in self.results:
             tree.insert(
@@ -89,6 +93,8 @@ class TradingApp:
                     f"{result['sold']:.4f}",
                     f"{result['remaining_btc']:.4f}",
                     f"{result['holding_value']:.2f}",
+                    f"{result['profit_threshold']:.2f}",
+                    f"{result['trailing_stop_pct']:.2f}",
                 ),
             )
 

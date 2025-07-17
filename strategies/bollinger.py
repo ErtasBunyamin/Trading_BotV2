@@ -11,6 +11,14 @@ class BollingerStrategy:
 
     name = "Bollinger"
 
+    def __init__(
+        self,
+        profit_threshold: float | None = None,
+        trailing_stop_pct: float | None = None,
+    ) -> None:
+        self.profit_threshold = profit_threshold
+        self.trailing_stop_pct = trailing_stop_pct
+
     def generate_signals(self, prices: List[float]) -> List[tuple[int, str, float]]:
         signals: List[tuple[int, str, float]] = []
         period = 20

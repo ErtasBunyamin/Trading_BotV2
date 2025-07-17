@@ -17,11 +17,13 @@ class Simulation:
         logger: Logger,
         strategies: Iterable,
         trailing_stop_pct: float = 0.01,
+        profit_threshold: float = 0.02,
     ) -> None:
         self.data_service = data_service
         self.logger = logger
         self.strategies = list(strategies)
         self.trailing_stop_pct = trailing_stop_pct
+        self.profit_threshold = profit_threshold
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
@@ -30,6 +32,17 @@ class Simulation:
 
         results = []
         for strategy in self.strategies:
+            strategy_trailing_stop = (
+                getattr(strategy, "trailing_stop_pct", None)
+                if getattr(strategy, "trailing_stop_pct", None) is not None
+                else self.trailing_stop_pct
+            )
+            strategy_profit_threshold = (
+                getattr(strategy, "profit_threshold", None)
+                if getattr(strategy, "profit_threshold", None) is not None
+                else self.profit_threshold
+            )
+
             signals = strategy.generate_signals(prices)
             idx = 0
             balance = 10000.0
@@ -45,7 +58,7 @@ class Simulation:
                 if position > 0:
                     if price > highest_price:
                         highest_price = price
-                    elif price <= highest_price * (1 - self.trailing_stop_pct):
+                    elif price <= highest_price * (1 - strategy_trailing_stop):
                         balance += position * price
                         trades.append((i, "SELL", position, price, balance))
                         sold_total += position
@@ -69,7 +82,11 @@ class Simulation:
                             highest_price = price
                     elif action == "SELL" and position > 0:
                         potential_profit = position * price - position_cost
-                        if strength < 0.5 and position_cost > 0 and potential_profit / position_cost >= 0.02:
+                        if (
+                            strength < 0.5
+                            and position_cost > 0
+                            and potential_profit / position_cost >= strategy_profit_threshold
+                        ):
                             amount = position
                         else:
                             amount = position * strength
@@ -103,6 +120,8 @@ class Simulation:
                     "remaining_btc": position,
                     "holding_value": holding_value,
                     "trailing_stops": trailing_closed,
+                    "profit_threshold": strategy_profit_threshold,
+                    "trailing_stop_pct": strategy_trailing_stop,
                 }
             )
             self.logger.log(f"{strategy.name} profit: {profit:.2f}")

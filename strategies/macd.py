@@ -21,6 +21,14 @@ class MACDStrategy:
 
     name = "MACD"
 
+    def __init__(
+        self,
+        profit_threshold: float | None = None,
+        trailing_stop_pct: float | None = None,
+    ) -> None:
+        self.profit_threshold = profit_threshold
+        self.trailing_stop_pct = trailing_stop_pct
+
     def generate_signals(self, prices: List[float]) -> List[tuple[int, str, float]]:
         short = ema(prices, 12)
         long_ = ema(prices, 26)

@@ -18,17 +18,22 @@ class Simulation:
         strategies: Iterable,
         trailing_stop_pct: float = 0.01,
         profit_threshold: float = 0.02,
+        price_limit: int | None = 288,
     ) -> None:
         self.data_service = data_service
         self.logger = logger
         self.strategies = list(strategies)
         self.trailing_stop_pct = trailing_stop_pct
         self.profit_threshold = profit_threshold
+        self.price_limit = price_limit
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
-        # Fetch 24 hours of data using 5 minute candles (288 total)
-        prices = self.data_service.get_historical_prices(limit=288, interval="5m")
+        # Fetch historical prices. ``price_limit`` may be ``None`` to request
+        # the maximum number of candles from the data service.
+        prices = self.data_service.get_historical_prices(
+            limit=self.price_limit, interval="5m"
+        )
 
         results = []
         for strategy in self.strategies:

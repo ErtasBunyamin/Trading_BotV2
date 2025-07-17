@@ -26,7 +26,9 @@ def main() -> None:
         RandomStrategy(),
         CustomStrategy(),
     ]
-    simulation = Simulation(data_service, logger, strategies)
+    # Request the maximum available candle history so the GUI can display
+    # all available bars without limitation.
+    simulation = Simulation(data_service, logger, strategies, price_limit=None)
 
     logger.log("Application started")
     results = simulation.run()

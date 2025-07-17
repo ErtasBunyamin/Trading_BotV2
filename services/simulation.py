@@ -19,6 +19,7 @@ class Simulation:
         trailing_stop_pct: float = 0.01,
         profit_threshold: float = 0.02,
         price_limit: int | None = 288,
+        full_balance: bool = False,
     ) -> None:
         self.data_service = data_service
         self.logger = logger
@@ -26,6 +27,7 @@ class Simulation:
         self.trailing_stop_pct = trailing_stop_pct
         self.profit_threshold = profit_threshold
         self.price_limit = price_limit
+        self.full_balance = full_balance
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
@@ -50,6 +52,7 @@ class Simulation:
                 if getattr(strategy, "profit_threshold", None) is not None
                 else self.profit_threshold
             )
+            trade_full_balance = getattr(strategy, "trade_full_balance", self.full_balance)
 
             signals = strategy.generate_signals(prices)
             idx = 0
@@ -78,6 +81,10 @@ class Simulation:
                 while idx < len(signals) and signals[idx][0] == i:
                     _, action, strength = signals[idx]
                     strength = max(0.0, min(1.0, strength))
+
+                    if trade_full_balance:
+                        strength = 1.0
+
                     if action == "BUY" and balance > 0:
                         cost = balance * strength
                         amount = cost / price
@@ -90,7 +97,9 @@ class Simulation:
                             highest_price = price
                     elif action == "SELL" and position > 0:
                         potential_profit = position * price - position_cost
-                        if (
+                        if trade_full_balance:
+                            amount = position
+                        elif (
                             strength < 0.5
                             and position_cost > 0
                             and potential_profit / position_cost >= strategy_profit_threshold

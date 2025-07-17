@@ -30,7 +30,13 @@ def main() -> None:
     ]
     # Request the maximum available candle history so the GUI can display
     # all available bars without limitation.
-    simulation = Simulation(data_service, logger, strategies, price_limit=None)
+    simulation = Simulation(
+        data_service,
+        logger,
+        strategies,
+        price_limit=None,
+        full_balance=False,
+    )
 
     logger.log("Application started")
     results = simulation.run()

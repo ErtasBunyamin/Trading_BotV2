@@ -87,11 +87,14 @@ class DynamicHybridStrategy:
         opportunity_penalty: float = 0.2,
         opportunity_decay: float = 0.02,
         min_threshold_factor: float = 0.5,
+        min_threshold: float = 0.05,
+        max_threshold: float = 0.5,
         trade_freq_window: int = 50,
         min_trades: int = 3,
         max_trades: int = 15,
         min_trade_strength: float = 0.2,
         max_trade_strength: float = 0.6,
+        trade_full_balance: bool = True,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -166,11 +169,14 @@ class DynamicHybridStrategy:
         self.opportunity_penalty = opportunity_penalty
         self.opportunity_decay = opportunity_decay
         self.min_threshold_factor = min_threshold_factor
+        self.min_threshold = min_threshold
+        self.max_threshold = max_threshold
         self.trade_freq_window = trade_freq_window
         self.min_trades = min_trades
         self.max_trades = max_trades
         self.min_trade_strength = min_trade_strength
         self.max_trade_strength = max_trade_strength
+        self.trade_full_balance = trade_full_balance
 
         self._base_threshold_default = base_threshold
         self._min_distance_default = min_signal_distance
@@ -573,6 +579,8 @@ class DynamicHybridStrategy:
             if self.protective:
                 threshold *= 1.5
 
+            threshold = max(self.min_threshold, min(self.max_threshold, threshold))
+
             if abs(score) < dynamic_conf:
                 if self.log_decisions:
                     self.decision_log.append((idx, "confidence"))
@@ -754,8 +762,18 @@ class DynamicHybridStrategy:
             if self.position == 0:
                 if score >= threshold:
                     self._record_missed(idx, prices, "BUY")
+                    strength = 1.0
+                    final_signals.append((idx, "BUY", strength))
+                    self.trade_history.append(idx)
+                    if self.log_decisions:
+                        self.decision_log.append((idx, "missed_buy_exec"))
                 elif score <= -threshold:
                     self._record_missed(idx, prices, "SELL")
+                    strength = 1.0
+                    final_signals.append((idx, "SELL", strength))
+                    self.trade_history.append(idx)
+                    if self.log_decisions:
+                        self.decision_log.append((idx, "missed_sell_exec"))
 
             # Detect strong moves without a position
             if (
@@ -772,6 +790,10 @@ class DynamicHybridStrategy:
                 )
                 action = "BUY" if prices[idx] > prices[idx - 1] else "SELL"
                 self._record_missed(idx, prices, action)
+                final_signals.append((idx, action, 1.0))
+                self.trade_history.append(idx)
+                if self.log_decisions:
+                    self.decision_log.append((idx, f"missed_{action.lower()}_exec"))
 
             # Gradually recover the threshold factor
             self.threshold_factor = min(

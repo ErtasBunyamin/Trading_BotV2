@@ -35,7 +35,7 @@ def main() -> None:
         logger,
         strategies,
         price_limit=None,
-        full_balance=False,
+        full_balance=True,
         commission_pct=0.001,
         slippage_pct=0.0005,
         min_trade_size=0.0001,

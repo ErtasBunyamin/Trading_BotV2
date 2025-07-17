@@ -62,7 +62,7 @@ Initially, the following example strategies will be used:
 - Custom (User defined or added later)
 - Dynamic Hybrid (ATR & volume filters, adaptive risk management, session-aware
  thresholds, market regime detection, multi-timeframe trend filters, commission/slippage simulation and parameter optimization)
-  with missed-opportunity detection and adaptive thresholding
+  with missed-opportunity detection, automatic trading of missed signals, adaptive thresholding, and an expected-profit table
 Each strategy triggers trades according to its own rules and visualizes the results.
 
 ## Development Plan

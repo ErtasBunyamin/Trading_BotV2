@@ -10,6 +10,11 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 
 
+def fmt(value: float | None, fmt_str: str = ".2f") -> str:
+    """Return formatted float or '-' when value is ``None``."""
+    return f"{value:{fmt_str}}" if value is not None else "-"
+
+
 class TradingApp:
     """Display strategy price charts and profits."""
 
@@ -80,9 +85,6 @@ class TradingApp:
         tree.heading("profit_threshold", text="Profit Th")
         tree.heading("trailing_stop", text="Trailing %")
         tree.pack(fill="both", expand=True)
-        def fmt(value: float | None, fmt_str: str = ".2f") -> str:
-            """Return formatted float or '-' when value is ``None``."""
-            return f"{value:{fmt_str}}" if value is not None else "-"
 
         for result in self.results:
             tree.insert(
@@ -122,9 +124,9 @@ class TradingApp:
                         result["name"],
                         idx,
                         action,
-                        f"{amount:.4f}",
-                        f"{price:.2f}",
-                        f"{balance:.2f}",
+                        fmt(amount, ".4f"),
+                        fmt(price),
+                        fmt(balance),
                     ),
                 )
 

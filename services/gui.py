@@ -87,6 +87,10 @@ class TradingApp:
             "missed_buy",
             "missed_sell",
             "missed_profit",
+            "expected_profit",
+            "trades",
+            "avg_trade",
+            "missed_count",
         )
         tree = ttk.Treeview(win, columns=cols, show="headings")
         tree.heading("strategy", text="Strategy")
@@ -102,6 +106,10 @@ class TradingApp:
         tree.heading("missed_buy", text="Missed Buy")
         tree.heading("missed_sell", text="Missed Sell")
         tree.heading("missed_profit", text="Missed Pot")
+        tree.heading("expected_profit", text="Expected")
+        tree.heading("trades", text="Trades")
+        tree.heading("avg_trade", text="Avg Size")
+        tree.heading("missed_count", text="Missed Cnt")
         tree.pack(fill="both", expand=True)
 
         for result in self.results:
@@ -122,6 +130,10 @@ class TradingApp:
                     result.get("missed_buy", 0),
                     result.get("missed_sell", 0),
                     fmt(result.get("missed_profit")),
+                    fmt(result.get("expected_profit")),
+                    result.get("trade_count", 0),
+                    fmt(result.get("avg_trade_size"), ".4f"),
+                    result.get("missed_count", 0),
                 ),
             )
 
@@ -137,6 +149,7 @@ class TradingApp:
             "balance",
             "reason",
             "pnl",
+            "potential",
         )
         frame = ttk.Frame(win)
         frame.pack(fill="both", expand=True)
@@ -158,6 +171,7 @@ class TradingApp:
                 "Balance (TL)",
                 "Reason",
                 "PnL",
+                "Potential",
             ],
         ):
             tree.heading(col, text=text)
@@ -178,6 +192,24 @@ class TradingApp:
                         fmt(log.get("balance_after")),
                         log.get("reason", ""),
                         fmt(log.get("pnl")),
+                        "",
+                    ),
+                )
+
+            for idx, price, action, pot in result.get("opportunities", []):
+                tree.insert(
+                    "",
+                    tk.END,
+                    values=(
+                        result["name"],
+                        idx,
+                        f"MISSED_{action}",
+                        "",
+                        fmt(price),
+                        "",
+                        "missed",
+                        "",
+                        fmt(pot),
                     ),
                 )
 

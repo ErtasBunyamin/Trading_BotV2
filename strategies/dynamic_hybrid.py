@@ -6,6 +6,8 @@ each indicator. It also factors in the current price location within a
 lookback window and the short-term trend direction. Trade size scales
 dynamically with recent wins and trend strength, and optional
 correlation analysis can reduce risk when assets move together.
+Missed opportunities are recorded with estimated potential profit so
+that reports can compare realized versus expected gains.
 """
 
 from __future__ import annotations

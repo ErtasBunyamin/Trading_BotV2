@@ -74,6 +74,7 @@ class Simulation:
             trailing_closed = 0
 
             performance_logs: List[dict] = []
+            trade_amounts: List[float] = []
 
             for i, price in enumerate(prices):
                 if position > 0:
@@ -144,6 +145,7 @@ class Simulation:
                                 "ts_pct": strategy_trailing_stop,
                             }
                         )
+                        trade_amounts.append(amount)
                         bought_total += amount
                         if price > highest_price:
                             highest_price = price
@@ -194,6 +196,7 @@ class Simulation:
                                 "pnl": pnl,
                             }
                         )
+                        trade_amounts.append(amount)
                         sold_total += amount
                         if position == 0:
                             highest_price = 0.0
@@ -220,6 +223,7 @@ class Simulation:
                         "balance_after": balance,
                     }
                 )
+                trade_amounts.append(position)
                 sold_total += position
                 position = 0.0
                 position_cost = 0.0
@@ -244,6 +248,11 @@ class Simulation:
                 miss_profit = 0.0
                 miss_logs = []
 
+            trade_count = len(trade_amounts)
+            avg_trade_size = sum(trade_amounts) / trade_count if trade_count else 0.0
+            expected_profit = profit + miss_profit
+            miss_count = len(miss_logs)
+
             results.append(
                 {
                     "name": strategy.name,
@@ -264,6 +273,10 @@ class Simulation:
                     "missed_buy": miss_buy,
                     "missed_sell": miss_sell,
                     "missed_profit": miss_profit,
+                    "expected_profit": expected_profit,
+                    "trade_count": trade_count,
+                    "avg_trade_size": avg_trade_size,
+                    "missed_count": miss_count,
                 }
             )
             self.logger.log(f"{strategy.name} profit: {profit:.2f}")

@@ -17,6 +17,7 @@ Gerçek zamanlı al-sat simülasyonunda sinyal gücüne göre pozisyon büyükl�
 - EMA kesişimi ve hacim kırılımı ilk küçük pozisyonu tetikler, trend
   onaylandıkça kademeli alım yapılır
 - Kaçan fırsatları yakalamak için eşik otomatik düşürülür
+- Kâr tablosu gerçekleşen kazanç ile kaçan fırsatlardan doğabilecek maksimum kârı karşılaştırır
 
 Her strateji için ayrı grafik:
 

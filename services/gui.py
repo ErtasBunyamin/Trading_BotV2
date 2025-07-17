@@ -56,13 +56,23 @@ class TradingApp:
     def _show_profit(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("Profit Table")
-        cols = ("strategy", "profit", "profit_pct", "bought", "sold")
+        cols = (
+            "strategy",
+            "profit",
+            "profit_pct",
+            "bought",
+            "sold",
+            "remaining",
+            "value",
+        )
         tree = ttk.Treeview(win, columns=cols, show="headings")
         tree.heading("strategy", text="Strategy")
         tree.heading("profit", text="Profit (TL)")
         tree.heading("profit_pct", text="Profit (%)")
         tree.heading("bought", text="Bought (BTC)")
         tree.heading("sold", text="Sold (BTC)")
+        tree.heading("remaining", text="Remaining (BTC)")
+        tree.heading("value", text="Value (TL)")
         tree.pack(fill="both", expand=True)
         for result in self.results:
             tree.insert(
@@ -74,6 +84,8 @@ class TradingApp:
                     f"{result['profit_pct']:.2f}",
                     f"{result['bought']:.4f}",
                     f"{result['sold']:.4f}",
+                    f"{result['remaining_btc']:.4f}",
+                    f"{result['holding_value']:.2f}",
                 ),
             )
 

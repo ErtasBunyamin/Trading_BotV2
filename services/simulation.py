@@ -61,7 +61,8 @@ class Simulation:
                         sold_total += amount
                     idx += 1
 
-            final_value = balance + position * prices[-1]
+            holding_value = position * prices[-1]
+            final_value = balance + holding_value
             profit = final_value - 10000.0
             profit_pct = (profit / 10000.0) * 100
 
@@ -74,6 +75,8 @@ class Simulation:
                     "profit_pct": profit_pct,
                     "bought": bought_total,
                     "sold": sold_total,
+                    "remaining_btc": position,
+                    "holding_value": holding_value,
                 }
             )
             self.logger.log(f"{strategy.name} profit: {profit:.2f}")

@@ -43,8 +43,26 @@ class TradingApp:
                 for i, a, amt, price, _ in result["trades"]
                 if a == "SELL"
             ]
+            opps = result.get("opportunities", [])
             ax.scatter([b[0] for b in buys], [b[2] for b in buys], color="red", label="Buy")
             ax.scatter([s[0] for s in sells], [s[2] for s in sells], color="green", label="Sell")
+            if opps:
+                ax.scatter(
+                    [o[0] for o in opps],
+                    [o[1] for o in opps],
+                    color="purple",
+                    marker="x",
+                    label="Missed",
+                )
+                for idx, price in opps:
+                    ax.annotate(
+                        "X",
+                        (idx, price),
+                        textcoords="offset points",
+                        xytext=(0, -10),
+                        ha="center",
+                        color="purple",
+                    )
             for idx, amt, trade_price in buys:
                 ax.annotate(f"{amt:.4f}", (idx, trade_price), textcoords="offset points", xytext=(0, 5), ha="center", color="red")
             for idx, amt, trade_price in sells:

@@ -80,6 +80,11 @@ class DynamicHybridStrategy:
         sentiment_weight: float = 0.0,
         commission_pct: float = 0.001,
         slippage_pct: float = 0.0005,
+        opportunity_window: int = 20,
+        opportunity_move_mult: float = 2.0,
+        opportunity_penalty: float = 0.2,
+        opportunity_decay: float = 0.02,
+        min_threshold_factor: float = 0.5,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -149,6 +154,11 @@ class DynamicHybridStrategy:
         self.sentiment_weight = sentiment_weight
         self.commission_pct = commission_pct
         self.slippage_pct = slippage_pct
+        self.opportunity_window = opportunity_window
+        self.opportunity_move_mult = opportunity_move_mult
+        self.opportunity_penalty = opportunity_penalty
+        self.opportunity_decay = opportunity_decay
+        self.min_threshold_factor = min_threshold_factor
 
         self._base_threshold_default = base_threshold
         self._min_distance_default = min_signal_distance
@@ -167,6 +177,8 @@ class DynamicHybridStrategy:
         self.pyramid_count = 0
         self.weak_streak = 0
         self.protective = False
+        self.threshold_factor = 1.0
+        self.missed_opportunities: List[Tuple[int, float]] = []
 
         # Sub-strategies providing raw signals
         self._strategies = [
@@ -440,6 +452,15 @@ class DynamicHybridStrategy:
                 atr_allowed = atr >= atr_avg * self.atr_multiplier
             else:
                 atr_avg = atr
+            # Adaptive threshold with volatility anomalies
+            if atr_avg > 0:
+                vol_ratio = atr / atr_avg
+                if vol_ratio > 1.5:
+                    self.threshold_factor = max(
+                        self.min_threshold_factor, self.threshold_factor * 0.9
+                    )
+                elif vol_ratio < 0.7:
+                    self.threshold_factor = min(1.0, self.threshold_factor * 1.1)
 
             volume_allowed = True
             if volumes is not None and idx >= self.volume_period:
@@ -507,6 +528,8 @@ class DynamicHybridStrategy:
 
 
             threshold = self.get_threshold()
+            # apply adaptive opportunity factor
+            threshold *= self.threshold_factor
             dynamic_conf = self.confidence_threshold
             dynamic_dist = self.min_signal_distance
             # adapt parameters when overall win rate drops
@@ -596,6 +619,11 @@ class DynamicHybridStrategy:
             # update trailing stop reference
             if self.position > 0 and prices[idx] > self.highest_price:
                 self.highest_price = prices[idx]
+                dyn_stop = (atr * self.atr_stop_mult) / prices[idx]
+                self.trailing_stop_pct = max(dyn_stop, self.trailing_stop_pct * 0.9)
+                dyn_profit = (atr * self.atr_profit_mult) / prices[idx]
+                if self.profit_threshold is not None:
+                    self.profit_threshold = max(self.profit_threshold, dyn_profit)
 
             opened = False
             # Entry or pyramiding logic
@@ -690,6 +718,28 @@ class DynamicHybridStrategy:
             if self.log_decisions and self.position == 0:
                 self.decision_log.append((idx, "Score düşük"))
 
+            # Detect missed opportunities when the price moves significantly
+            if (
+                self.position == 0
+                and not opened
+                and idx > 0
+                and atr > 0
+                and abs(prices[idx] - prices[idx - 1])
+                >= atr * self.opportunity_move_mult
+            ):
+                self.threshold_factor = max(
+                    self.min_threshold_factor,
+                    self.threshold_factor - self.opportunity_penalty,
+                )
+                self.missed_opportunities.append((idx, prices[idx]))
+                if self.log_decisions:
+                    self.decision_log.append((idx, "missed"))
+
+            # Gradually recover the threshold factor
+            self.threshold_factor = min(
+                1.0, self.threshold_factor + self.opportunity_decay
+            )
+
         return final_signals
 
 
@@ -699,6 +749,7 @@ class DynamicHybridStrategy:
 # signals = strategy.generate_signals(prices)
 # print("First 5 decisions", signals[:5])
 # print("Why trades were skipped", strategy.decision_log[:5])
+# print("Missed", strategy.missed_opportunities[:5])
 # grid = {"base_threshold": [0.1, 0.15], "lookback": [40, 60]}
 # best = strategy.optimize_by_regime(prices, grid)
 # print("Best params per regime", best)

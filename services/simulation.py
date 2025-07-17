@@ -52,6 +52,7 @@ class Simulation:
             strategy_profit_threshold = getattr(
                 strategy, "profit_threshold", self.profit_threshold
             )
+            opps = getattr(strategy, "missed_opportunities", [])
             strategy_commission_pct = getattr(
                 strategy, "commission_pct", self.commission_pct
             )
@@ -215,11 +216,12 @@ class Simulation:
                     "bought": bought_total,
                     "sold": sold_total,
                     "remaining_btc": position,
-                    "holding_value": holding_value,
-                    "trailing_stops": trailing_closed,
-                    "profit_threshold": strategy_profit_threshold,
-                    "trailing_stop_pct": strategy_trailing_stop,
-                }
+                "holding_value": holding_value,
+                "trailing_stops": trailing_closed,
+                "profit_threshold": strategy_profit_threshold,
+                "trailing_stop_pct": strategy_trailing_stop,
+                "opportunities": opps,
+            }
             )
             self.logger.log(f"{strategy.name} profit: {profit:.2f}")
 

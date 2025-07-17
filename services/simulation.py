@@ -18,8 +18,8 @@ class Simulation:
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
-        # Only use the last 24 hours of historical prices (1h interval)
-        prices = self.data_service.get_historical_prices(limit=24)
+        # Use daily candles for the last month of data
+        prices = self.data_service.get_historical_prices(limit=30, interval="1d")
         results = []
         for strategy in self.strategies:
             balance = 10000.0
@@ -49,11 +49,13 @@ class Simulation:
                     signals_index += 1
             final_balance = balance + position * prices[-1]
             profit = final_balance - 10000.0
+            profit_pct = (profit / 10000.0) * 100
             results.append({
                 "name": strategy.name,
                 "prices": prices,
                 "trades": trades,
                 "profit": profit,
+                "profit_pct": profit_pct,
                 "bought": total_bought,
                 "sold": total_sold,
             })

@@ -78,7 +78,13 @@ class DynamicHybridStrategy:
         ema = pd.Series(prices).ewm(span=self.lookback).mean()
         window = prices[-self.lookback :]
         std = np.std(window)
-        slope = (ema.iloc[-1] - ema.iloc[-self.lookback]) / self.lookback
+        if len(ema) >= self.lookback:
+            start_idx = -self.lookback
+            length = self.lookback
+        else:
+            start_idx = 0
+            length = max(1, len(ema) - 1)
+        slope = (ema.iloc[-1] - ema.iloc[start_idx]) / length
         mean_price = np.mean(window)
         if std > self.std_coef * mean_price:
             self.market_regime = "volatile"

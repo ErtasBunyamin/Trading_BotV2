@@ -11,10 +11,17 @@ from services.logger import Logger
 class Simulation:
     """Simulate trades for each strategy on historical price data."""
 
-    def __init__(self, data_service: DataService, logger: Logger, strategies: Iterable) -> None:
+    def __init__(
+        self,
+        data_service: DataService,
+        logger: Logger,
+        strategies: Iterable,
+        trailing_stop_pct: float = 0.01,
+    ) -> None:
         self.data_service = data_service
         self.logger = logger
         self.strategies = list(strategies)
+        self.trailing_stop_pct = trailing_stop_pct
 
     def run(self) -> List[dict]:
         """Run the simulation and return results per strategy."""
@@ -31,8 +38,22 @@ class Simulation:
             trades: List[tuple[int, str, float, float, float]] = []
             bought_total = 0.0
             sold_total = 0.0
+            highest_price = 0.0
+            trailing_closed = 0
 
             for i, price in enumerate(prices):
+                if position > 0:
+                    if price > highest_price:
+                        highest_price = price
+                    elif price <= highest_price * (1 - self.trailing_stop_pct):
+                        balance += position * price
+                        trades.append((i, "SELL", position, price, balance))
+                        sold_total += position
+                        position = 0.0
+                        position_cost = 0.0
+                        highest_price = 0.0
+                        trailing_closed += 1
+
                 while idx < len(signals) and signals[idx][0] == i:
                     _, action, strength = signals[idx]
                     strength = max(0.0, min(1.0, strength))
@@ -44,8 +65,9 @@ class Simulation:
                         position_cost += cost
                         trades.append((i, "BUY", amount, price, balance))
                         bought_total += amount
+                        if price > highest_price:
+                            highest_price = price
                     elif action == "SELL" and position > 0:
-                        # Consider selling all if profit would exceed 2% even with low strength
                         potential_profit = position * price - position_cost
                         if strength < 0.5 and position_cost > 0 and potential_profit / position_cost >= 0.02:
                             amount = position
@@ -59,6 +81,8 @@ class Simulation:
                         position_cost -= sell_cost
                         trades.append((i, "SELL", amount, price, balance))
                         sold_total += amount
+                        if position == 0:
+                            highest_price = 0.0
                     idx += 1
 
             holding_value = position * prices[-1]
@@ -78,6 +102,7 @@ class Simulation:
                     "sold": sold_total,
                     "remaining_btc": position,
                     "holding_value": holding_value,
+                    "trailing_stops": trailing_closed,
                 }
             )
             self.logger.log(f"{strategy.name} profit: {profit:.2f}")

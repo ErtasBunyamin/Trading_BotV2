@@ -28,10 +28,14 @@ class TradingApp:
             fig, ax = plt.subplots(figsize=(6, 4))
             prices = result["prices"]
             ax.plot(prices, label="Price")
-            buys = [i for i, a in result["trades"] if a == "BUY"]
-            sells = [i for i, a in result["trades"] if a == "SELL"]
-            ax.scatter(buys, [prices[i] for i in buys], color="red", label="Buy")
-            ax.scatter(sells, [prices[i] for i in sells], color="green", label="Sell")
+            buys = [(i, amt) for i, a, amt in result["trades"] if a == "BUY"]
+            sells = [(i, amt) for i, a, amt in result["trades"] if a == "SELL"]
+            ax.scatter([b[0] for b in buys], [prices[b[0]] for b in buys], color="red", label="Buy")
+            ax.scatter([s[0] for s in sells], [prices[s[0]] for s in sells], color="green", label="Sell")
+            for idx, amt in buys:
+                ax.annotate(f"{amt:.4f}", (idx, prices[idx]), textcoords="offset points", xytext=(0, 5), ha="center", color="red")
+            for idx, amt in sells:
+                ax.annotate(f"{amt:.4f}", (idx, prices[idx]), textcoords="offset points", xytext=(0, 5), ha="center", color="green")
             ax.legend()
             canvas = FigureCanvasTkAgg(fig, master=frame)
             canvas.draw()
@@ -42,12 +46,24 @@ class TradingApp:
     def _show_profit(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("Profit Table")
-        tree = ttk.Treeview(win, columns=("strategy", "profit"), show="headings")
+        cols = ("strategy", "profit", "bought", "sold")
+        tree = ttk.Treeview(win, columns=cols, show="headings")
         tree.heading("strategy", text="Strategy")
         tree.heading("profit", text="Profit (TL)")
+        tree.heading("bought", text="Bought (BTC)")
+        tree.heading("sold", text="Sold (BTC)")
         tree.pack(fill="both", expand=True)
         for result in self.results:
-            tree.insert("", tk.END, values=(result["name"], f"{result['profit']:.2f}"))
+            tree.insert(
+                "",
+                tk.END,
+                values=(
+                    result["name"],
+                    f"{result['profit']:.2f}",
+                    f"{result['bought']:.4f}",
+                    f"{result['sold']:.4f}",
+                ),
+            )
 
     def run(self) -> None:
         self.root.mainloop()

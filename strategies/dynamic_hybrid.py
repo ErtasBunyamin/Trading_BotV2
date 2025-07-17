@@ -1,4 +1,10 @@
-"""Dynamic hybrid trading strategy using multiple indicators."""
+"""Dynamic hybrid trading strategy using multiple indicators.
+
+This strategy aggregates signals from several indicators and adjusts
+its decision threshold based on market regime and recent performance of
+each indicator. It also factors in the current price location within a
+lookback window and the short-term trend direction.
+"""
 
 from __future__ import annotations
 
@@ -18,8 +24,15 @@ class DynamicHybridStrategy:
         volatile_threshold: float = 0.25,
         sideways_threshold: float = 0.11,
         lookback: int = 50,
+        *,
+        std_coef: float = 0.004,
+        slope_threshold: float = 0.0002,
+        location_weight: float = 0.2,
+        trend_weight: float = 0.2,
+        min_signal_distance: int = 1,
+        confidence_threshold: float = 0.0,
     ) -> None:
-        self.indicator_winrates = {
+        self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
             "MACD": 0.5,
             "Bollinger": 0.5,
@@ -30,6 +43,12 @@ class DynamicHybridStrategy:
         self.volatile_threshold = volatile_threshold
         self.sideways_threshold = sideways_threshold
         self.lookback = lookback
+        self.std_coef = std_coef
+        self.slope_threshold = slope_threshold
+        self.location_weight = location_weight
+        self.trend_weight = trend_weight
+        self.min_signal_distance = min_signal_distance
+        self.confidence_threshold = confidence_threshold
 
     def update_winrates(self, trade_logs: List[Dict]) -> None:
         """Update indicator win rates using the last 20 trades."""
@@ -42,14 +61,15 @@ class DynamicHybridStrategy:
                 self.indicator_winrates[ind] = 0.5
 
     def detect_market_regime(self, prices: List[float]) -> None:
-        """Classify market regime as trend, volatile or sideways."""
+        """Classify the market regime using EMA slope and volatility."""
         ema = pd.Series(prices).ewm(span=self.lookback).mean()
-        std = np.std(prices[-self.lookback :])
+        window = prices[-self.lookback :]
+        std = np.std(window)
         slope = (ema.iloc[-1] - ema.iloc[-self.lookback]) / self.lookback
-        mean_price = np.mean(prices[-self.lookback :])
-        if std > 0.004 * mean_price:
+        mean_price = np.mean(window)
+        if std > self.std_coef * mean_price:
             self.market_regime = "volatile"
-        elif abs(slope) < 0.0002:
+        elif abs(slope) < self.slope_threshold:
             self.market_regime = "sideways"
         else:
             self.market_regime = "trend"
@@ -59,6 +79,10 @@ class DynamicHybridStrategy:
         score = 0.0
         total_weight = sum(self.indicator_winrates.values())
         for ind, (action, strength) in indicator_signals.items():
+            if ind not in self.indicator_winrates:
+                # Register unseen indicator with a neutral win rate
+                self.indicator_winrates[ind] = 0.5
+                total_weight = sum(self.indicator_winrates.values())
             weight = (
                 self.indicator_winrates[ind] / total_weight if total_weight else 0.25
             )
@@ -76,19 +100,77 @@ class DynamicHybridStrategy:
             return self.volatile_threshold
         return self.sideways_threshold
 
-    def generate_signal(
+    def _trend_score(self, window: List[float]) -> float:
+        """Return normalized trend strength for the given price window."""
+        n = len(window)
+        if n < 2:
+            return 0.0
+        xs = list(range(n))
+        mean_x = sum(xs) / n
+        mean_y = sum(window) / n
+        num = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, window))
+        den = sum((x - mean_x) ** 2 for x in xs)
+        slope = num / den if den != 0 else 0.0
+        trend = slope * n / window[-1]
+        return max(-1.0, min(1.0, trend))
+
+    def generate_signals(
         self,
         prices: List[float],
-        indicator_signals: Dict[str, Tuple[str, float]],
+        strat_signals: List[Tuple[int, str, float, str]],
         trade_logs: List[Dict],
-    ) -> Tuple[str | None, float]:
-        """Return a single action and its score."""
+    ) -> List[Tuple[int, str, float]]:
+        """Aggregate indicator signals and return trading decisions."""
         self.update_winrates(trade_logs)
-        self.detect_market_regime(prices)
-        threshold = self.get_threshold()
-        score = self.dynamic_voting(indicator_signals)
-        if score >= threshold:
-            return "BUY", score
-        if score <= -threshold:
-            return "SELL", abs(score)
-        return None, 0.0
+
+        # Organize signals per bar as indicator -> (action, strength)
+        signals_by_idx: Dict[int, Dict[str, Tuple[str, float]]] = {}
+        for idx, action, strength, ind in strat_signals:
+            signals_by_idx.setdefault(idx, {})[ind] = (action, strength)
+
+        final_signals: List[Tuple[int, str, float]] = []
+        last_idx = -self.min_signal_distance
+
+        for idx in range(len(prices)):
+            indicator_map = signals_by_idx.get(idx)
+            if not indicator_map:
+                continue
+
+            self.detect_market_regime(prices[: idx + 1])
+            score = self.dynamic_voting(indicator_map)
+
+            # Price location contribution within lookback window
+            start = max(0, idx - self.lookback + 1)
+            window = prices[start : idx + 1]
+            low = min(window)
+            high = max(window)
+            if high != low:
+                pos = (prices[idx] - low) / (high - low)
+                score += (0.5 - pos) * 2 * self.location_weight
+
+            # Trend contribution
+            if self.trend_weight:
+                score += self._trend_score(window) * self.trend_weight
+
+            threshold = self.get_threshold()
+
+            if abs(score) < self.confidence_threshold:
+                continue
+            if idx - last_idx < self.min_signal_distance:
+                continue
+
+            if score >= threshold:
+                final_signals.append((idx, "BUY", min(1.0, abs(score))))
+                last_idx = idx
+            elif score <= -threshold:
+                final_signals.append((idx, "SELL", min(1.0, abs(score))))
+                last_idx = idx
+
+        return final_signals
+
+
+# Example usage
+# strategy = DynamicHybridStrategy()
+# signals = strategy.generate_signals(
+#     prices, [(10, "BUY", 0.8, "RSI"), (10, "BUY", 0.7, "MACD")], trade_logs
+# )

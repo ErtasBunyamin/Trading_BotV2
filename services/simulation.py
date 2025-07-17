@@ -142,6 +142,7 @@ class Simulation:
                         elif (
                             strength < 0.5
                             and position_cost > 0
+                            and strategy_profit_threshold is not None
                             and potential_profit / position_cost >= strategy_profit_threshold
                         ):
                             amount = position

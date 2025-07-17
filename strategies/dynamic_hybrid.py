@@ -71,6 +71,13 @@ class DynamicHybridStrategy:
         pyramid_step_pct: float = 0.01,
         base_position_size: float = 0.25,
         weak_exit_count: int = 2,
+        regime_strategies: Dict[str, List[str]] | None = None,
+        volatility_risk: float = 1.0,
+        scaling_window: int = 5,
+        protect_loss_count: int = 3,
+        multi_tf_weight: float = 0.0,
+        higher_lookback: int = 100,
+        sentiment_weight: float = 0.0,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -95,7 +102,10 @@ class DynamicHybridStrategy:
         self.atr_multiplier = atr_multiplier
         self.volume_period = volume_period
         self.volume_multiplier = volume_multiplier
+        # ``risk_atr_scale`` kept for backward compatibility; ``volatility_risk``
+        # controls how aggressively position size shrinks with volatility.
         self.risk_atr_scale = risk_atr_scale
+        self.volatility_risk = volatility_risk
         self.drawdown_lookback = drawdown_lookback
         self.drawdown_penalty = drawdown_penalty
         self.winrate_window = winrate_window
@@ -124,6 +134,17 @@ class DynamicHybridStrategy:
         self.pyramid_step_pct = pyramid_step_pct
         self.base_position_size = base_position_size
         self.weak_exit_count = weak_exit_count
+        self.regime_strategies = regime_strategies or {
+            "trend": ["MACD", "MA Cross", "RSI", "Bollinger"],
+            "volatile": ["Bollinger", "RSI", "MACD"],
+            "sideways": ["RSI", "Bollinger"],
+        }
+        self.volatility_risk = volatility_risk
+        self.scaling_window = scaling_window
+        self.protect_loss_count = protect_loss_count
+        self.multi_tf_weight = multi_tf_weight
+        self.higher_lookback = higher_lookback
+        self.sentiment_weight = sentiment_weight
 
         self._base_threshold_default = base_threshold
         self._min_distance_default = min_signal_distance
@@ -141,6 +162,7 @@ class DynamicHybridStrategy:
         self.last_buy_price = 0.0
         self.pyramid_count = 0
         self.weak_streak = 0
+        self.protective = False
 
         # Sub-strategies providing raw signals
         self._strategies = [
@@ -149,6 +171,7 @@ class DynamicHybridStrategy:
             BollingerStrategy(),
             MACrossStrategy(),
         ]
+        self._strategy_map = {s.name: s for s in self._strategies}
 
     def before_run(self, prices: List[float]) -> None:
         """Initialize ATR based stop levels before simulation starts."""
@@ -251,6 +274,9 @@ class DynamicHybridStrategy:
         if not trade_logs:
             return
         last_pnl = trade_logs[-1].get("pnl", 0)
+        recent = trade_logs[-self.scaling_window :]
+        pnl_sum = sum(t.get("pnl", 0) for t in recent)
+
         if last_pnl <= 0:
             self.loss_streak += 1
             self.profit_streak = 0
@@ -262,6 +288,15 @@ class DynamicHybridStrategy:
                 self.scale_factor = min(
                     self.scale_max, self.scale_factor + self.scale_step
                 )
+
+        if pnl_sum < 0:
+            self.scale_factor = max(1.0, self.scale_factor - self.scale_step)
+        elif pnl_sum > 0:
+            self.scale_factor = min(self.scale_max, self.scale_factor + self.scale_step)
+
+        self.protective = self.loss_streak >= self.protect_loss_count
+        if self.profit_streak >= self.strong_trend_streak:
+            self.protective = False
 
         if prices and len(prices) >= self.lookback:
             window = prices[-self.lookback :]
@@ -286,7 +321,14 @@ class DynamicHybridStrategy:
             return
         win = sum(1 for t in history if t["pnl"] > 0) / len(history)
         profit = sum(t["pnl"] for t in history)
-        if win < self.winrate_target or profit <= 0:
+        max_equity = 0.0
+        equity = 0.0
+        drawdown = 0.0
+        for t in history:
+            equity += t.get("pnl", 0.0)
+            max_equity = max(max_equity, equity)
+            drawdown = min(drawdown, equity - max_equity)
+        if win < self.winrate_target or profit <= 0 or drawdown < -abs(profit):
             self.base_threshold = max(
                 0.05, self.base_threshold * (1 - self.auto_tune_step)
             )
@@ -319,6 +361,8 @@ class DynamicHybridStrategy:
         trade_logs: List[Dict] | None = None,
         volumes: List[float] | None = None,
         other_assets: List[List[float]] | None = None,
+        higher_prices: List[float] | None = None,
+        sentiment: List[float] | None = None,
     ) -> List[Tuple[int, str, float]]:
         """Aggregate indicator signals and return trading decisions."""
 
@@ -374,6 +418,9 @@ class DynamicHybridStrategy:
 
         for idx in range(len(prices)):
             indicator_map = signals_by_idx.get(idx)
+            if indicator_map:
+                allowed = self.regime_strategies.get(self.market_regime, [])
+                indicator_map = {k: v for k, v in indicator_map.items() if k in allowed}
             if not indicator_map:
                 # Still update trailing stop when in a position
                 if self.position > 0 and prices[idx] > self.highest_price:
@@ -404,6 +451,8 @@ class DynamicHybridStrategy:
 
             # Evaluate market regime and indicator score
             self.detect_market_regime(prices[: idx + 1])
+            if self.log_decisions:
+                self.decision_log.append((idx, f"regime {self.market_regime}"))
             score = self.dynamic_voting(indicator_map)
 
             # Price location contribution within lookback window
@@ -419,6 +468,16 @@ class DynamicHybridStrategy:
             if self.trend_weight:
                 score += self._trend_score(window) * self.trend_weight
 
+            if (
+                self.multi_tf_weight
+                and higher_prices is not None
+                and len(higher_prices) >= self.higher_lookback
+                and idx < len(higher_prices)
+            ):
+                h_start = max(0, idx - self.higher_lookback + 1)
+                h_window = higher_prices[h_start : idx + 1]
+                score += self._trend_score(h_window) * self.multi_tf_weight
+
             # Momentum & EMA filter
             if self.momentum_weight and idx >= self.ema_momentum_period:
                 ema = (
@@ -433,6 +492,13 @@ class DynamicHybridStrategy:
                     score += self.momentum_weight
                 elif prices[idx] < ema:
                     score -= self.momentum_weight
+
+            if (
+                self.sentiment_weight
+                and sentiment is not None
+                and idx < len(sentiment)
+            ):
+                score += (sentiment[idx] - 0.5) * 2 * self.sentiment_weight
 
             # Volatility based take-profit and trailing stop
             if prices[idx] > 0:
@@ -459,6 +525,8 @@ class DynamicHybridStrategy:
                 dynamic_conf += delta * 0.5
                 dynamic_dist = int(self.min_signal_distance + delta * 2)
             threshold *= self._session_factor(idx)
+            if self.protective:
+                threshold *= 1.5
 
             if abs(score) < dynamic_conf:
                 if self.log_decisions:
@@ -475,7 +543,11 @@ class DynamicHybridStrategy:
             risk_scale = self.scale_factor
             if atr_avg > 0:
                 volatility_factor = atr / atr_avg
-                risk_scale /= max(1.0, volatility_factor ** self.risk_atr_scale)
+            else:
+                volatility_factor = 1.0
+            std_factor = np.std(window) / np.mean(window) if np.mean(window) else 0
+            combined_vol = max(volatility_factor, std_factor)
+            risk_scale /= max(1.0, combined_vol ** self.volatility_risk)
             if self.loss_streak > self.drawdown_lookback:
                 risk_scale *= self.drawdown_penalty ** (
                     self.loss_streak - self.drawdown_lookback
@@ -620,6 +692,7 @@ class DynamicHybridStrategy:
                 signals = self.generate_signals(prices)
                 balance = 0.0
                 position = 0.0
+                equity_curve = []
                 for idx, action, strength in signals:
                     if action == "BUY":
                         position += strength
@@ -627,9 +700,15 @@ class DynamicHybridStrategy:
                     else:
                         position -= strength
                         balance += strength * prices[idx]
+                    equity_curve.append(balance + position * prices[idx])
                 final = balance + position * prices[-1]
+                max_e = 0.0
+                dd = 0.0
+                for v in equity_curve:
+                    max_e = max(max_e, v)
+                    dd = min(dd, v - max_e)
                 if final > best_profit:
-                    best_profit = final
+                    best_profit = final + dd
                     best_params = {"base_threshold": b, "lookback": l}
         self.base_threshold = original["base_threshold"]
         self.lookback = original["lookback"]

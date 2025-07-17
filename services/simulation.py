@@ -30,9 +30,11 @@ class Simulation:
             })
 
         prices: List[float] = []
-        for i, price in enumerate(
-            self.data_service.stream_prices(limit=iterations, interval=interval)
-        ):
+        for i in range(iterations):
+            price = self.data_service.fetch_price()
+            self.logger.log(
+                f"Price update {i + 1}/{iterations}: {price:.2f}"
+            )
             prices.append(price)
             for result, strategy in zip(results, self.strategies):
                 result["prices"].append(price)
@@ -47,12 +49,20 @@ class Simulation:
                         result["position"] += amount / price
                         result["balance"] -= amount
                         result["trades"].append((i, "BUY"))
+                        self.logger.log(
+                            f"{strategy.name} BUY {amount:.2f} at {price:.2f}"
+                        )
                     elif action == "SELL" and result["position"] > 0:
                         amount = result["position"] * strength
                         result["balance"] += amount * price
                         result["position"] -= amount
                         result["trades"].append((i, "SELL"))
-            time.sleep(0)  # allow interruption in environments without real time
+                        self.logger.log(
+                            f"{strategy.name} SELL {amount:.2f} at {price:.2f}"
+                        )
+            if i < iterations - 1:
+                self.logger.log(f"Waiting {interval} seconds for next update")
+                time.sleep(interval)
 
         for result in results:
             final_balance = result["balance"] + result["position"] * prices[-1]

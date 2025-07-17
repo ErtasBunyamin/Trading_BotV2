@@ -75,7 +75,8 @@ MA Cross (Moving Average Cross)
 
 Custom (Kullanıcıya özgü veya sonradan eklenebilir strateji)
 
-Dynamic Hybrid (ATR/hacim filtresi ve uyarlanabilir risk yönetimi)
+Dynamic Hybrid (ATR & hacim filtresi, uyarlanabilir risk yönetimi, seans
+eşikleri ve ayrıntılı karar logları)
 
 Her stratejinin kendi kuralları ile işlemleri tetiklenir ve sonuçlar görselleştirilir.
 

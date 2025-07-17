@@ -25,21 +25,21 @@ class DynamicHybridStrategy:
 
     def __init__(
         self,
-        base_threshold: float = 0.18,
-        volatile_threshold: float = 0.25,
-        sideways_threshold: float = 0.11,
+        base_threshold: float = 0.12,
+        volatile_threshold: float = 0.18,
+        sideways_threshold: float = 0.08,
         lookback: int = 50,
         *,
         std_coef: float = 0.004,
         slope_threshold: float = 0.0002,
         location_weight: float = 0.2,
         trend_weight: float = 0.2,
-        min_signal_distance: int = 1,
-        confidence_threshold: float = 0.0,
+        min_signal_distance: int = 2,
+        confidence_threshold: float = 0.1,
         atr_period: int = 14,
-        atr_multiplier: float = 1.0,
+        atr_multiplier: float = 0.5,
         volume_period: int = 20,
-        volume_multiplier: float = 1.0,
+        volume_multiplier: float = 1.3,
         risk_atr_scale: float = 1.0,
         drawdown_lookback: int = 3,
         drawdown_penalty: float = 0.5,
@@ -50,6 +50,7 @@ class DynamicHybridStrategy:
         session_thresholds: Dict[Tuple[int, int], float] | None = None,
         atr_stop_mult: float = 1.5,
         atr_profit_mult: float = 2.0,
+        log_decisions: bool = True,
     ) -> None:
         self.indicator_winrates: Dict[str, float] = {
             "RSI": 0.5,
@@ -84,10 +85,12 @@ class DynamicHybridStrategy:
         self.session_thresholds = session_thresholds or {}
         self.atr_stop_mult = atr_stop_mult
         self.atr_profit_mult = atr_profit_mult
+        self.log_decisions = log_decisions
 
         # Runtime state
         self.loss_streak = 0
         self._atr_values: List[float] = []
+        self.decision_log: List[Tuple[int, str]] = []
 
         # Sub-strategies providing raw signals
         self._strategies = [
@@ -281,7 +284,17 @@ class DynamicHybridStrategy:
                 vol_avg = float(np.mean(volumes[idx - self.volume_period + 1 : idx + 1]))
                 volume_allowed = volumes[idx] >= vol_avg * self.volume_multiplier
             if not atr_allowed or not volume_allowed:
+                if self.log_decisions:
+                    reason = "ATR düşük" if not atr_allowed else "Hacim düşük"
+                    if not atr_allowed and not volume_allowed:
+                        reason = "ATR & Hacim düşük"
+                    self.decision_log.append((idx, reason))
                 continue
+
+            # Update stop levels dynamically with current ATR
+            if prices[idx] > 0:
+                self.trailing_stop_pct = (atr * self.atr_stop_mult) / prices[idx]
+                self.profit_threshold = (atr * self.atr_profit_mult) / prices[idx]
 
             self.detect_market_regime(prices[: idx + 1])
             score = self.dynamic_voting(indicator_map)
@@ -315,14 +328,23 @@ class DynamicHybridStrategy:
                     score -= self.momentum_weight
 
             threshold = self.get_threshold()
-            # adapt threshold based on recent win rate and session
+            dynamic_conf = self.confidence_threshold
+            dynamic_dist = self.min_signal_distance
+            # adapt parameters when overall win rate drops
             if overall_trades and overall_win < self.winrate_target:
-                threshold *= 1 + (self.winrate_target - overall_win)
+                delta = self.winrate_target - overall_win
+                threshold *= 1 + delta
+                dynamic_conf += delta * 0.5
+                dynamic_dist = int(self.min_signal_distance + delta * 2)
             threshold *= self._session_factor(idx)
 
-            if abs(score) < self.confidence_threshold:
+            if abs(score) < dynamic_conf:
+                if self.log_decisions:
+                    self.decision_log.append((idx, "confidence"))
                 continue
-            if idx - last_idx < self.min_signal_distance:
+            if idx - last_idx < dynamic_dist:
+                if self.log_decisions:
+                    self.decision_log.append((idx, "min_distance"))
                 continue
 
             # Risk based strength scaling
@@ -341,6 +363,9 @@ class DynamicHybridStrategy:
                 strength = min(1.0, abs(score) * risk_scale)
                 final_signals.append((idx, "SELL", strength))
                 last_idx = idx
+            else:
+                if self.log_decisions:
+                    self.decision_log.append((idx, "Score düşük"))
 
         return final_signals
 
@@ -348,3 +373,4 @@ class DynamicHybridStrategy:
 # Example usage
 # strategy = DynamicHybridStrategy()
 # signals = strategy.generate_signals(prices, volumes=volumes)
+# print("Decision log", strategy.decision_log[:5])
